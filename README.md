@@ -1,6 +1,6 @@
-# courier
+# rksync
 
-The CloucChain Courier is a distributed file synchronization protocol
+The CloucChain rksync is a distributed file synchronization protocol
 
 ## WARNING: This is an incomplete work-in-progress
 
