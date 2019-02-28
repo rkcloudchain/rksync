@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "github.com/rkcloudchain/rksync/protos" ;
+
+package protos;
+
+message SerializedIdentity {
+    string node_id = 1;
+    bytes id_bytes =2;
+}

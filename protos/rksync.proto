@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+option go_package = "github.com/rkcloudchain/rksync/protos" ;
+
+package protos;
+
+import "google/protobuf/empty.proto";
+
+service RKSync {
+    // SyncStream is the gRPC stream used for sending and receiving messages
+    rpc SyncStream(stream Envelope) returns (stream Envelope) {}
+
+    // Ping is used to probe a remote peer's aliveness
+    rpc Ping (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+}
+
+message Envelope {
+    bytes payload = 1;
+    bytes signature = 2;
+}
+
+message Payload {
+    uint64 seq_num = 1;
+    bytes data = 2;
+}
+
+message RKSyncMessage {
+    bytes channel = 1;
+    enum Tag {
+        EMPTY     = 0;
+        CHAN_ONLY = 1;
+    }
+    Tag tag = 2;
+    oneof content {
+        AliveMessage alive_msg = 4;
+        google.protobuf.Empty empty = 5;
+        ConnEstablish conn = 6;
+    }
+}
+
+message ConnEstablish {
+    bytes pki_id = 1;
+    bytes identity = 2;
+    bytes tls_cert_hash = 3;
+}
+
+message AliveMessage {
+    Member membership = 1;
+    PeerTime timestamp = 2;
+    bytes identity = 3;
+}
+
+message PeerTime {
+    uint64 inc_num = 1;
+    uint64 seq_num = 2;
+}
+
+message Member {
+    string endpoint = 1;
+    bytes pki_id = 2;
+}
