@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"sync"
@@ -96,11 +95,11 @@ func (is *identityMapper) Put(pkiID common.PKIidType, identity common.PeerIdenti
 	is.Lock()
 	defer is.Unlock()
 
-	if _, exists := is.certs[hex.EncodeToString(pkiID)]; exists {
+	if _, exists := is.certs[string(pkiID)]; exists {
 		return nil
 	}
 
-	is.certs[hex.EncodeToString(pkiID)] = cert
+	is.certs[string(pkiID)] = cert
 	return nil
 }
 
@@ -108,7 +107,7 @@ func (is *identityMapper) Get(pkiID common.PKIidType) (*x509.Certificate, error)
 	is.RLock()
 	defer is.RUnlock()
 
-	cert, exists := is.certs[hex.EncodeToString(pkiID)]
+	cert, exists := is.certs[string(pkiID)]
 	if !exists {
 		return nil, errors.New("PKIID wasn't found")
 	}

@@ -1,6 +1,9 @@
 package common
 
-import "encoding/hex"
+import (
+	"encoding/hex"
+	"fmt"
+)
 
 // PKIidType defines the type that holds the PKI-id
 // which is the security identifier of a peer
@@ -20,6 +23,11 @@ type PeerIdentityType []byte
 type NetworkMember struct {
 	Endpoint string
 	PKIID    PKIidType
+}
+
+// String converts a NetworkMember to a string
+func (p *NetworkMember) String() string {
+	return fmt.Sprintf("%s, PKIid: %v", p.Endpoint, p.PKIID)
 }
 
 // MessageAcceptor is a predicate that is used to

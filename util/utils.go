@@ -2,10 +2,14 @@ package util
 
 import (
 	"crypto/ecdsa"
+	cryptorand "crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"io"
+	"math/big"
+	"math/rand"
 
 	"github.com/pkg/errors"
 )
@@ -76,4 +80,16 @@ func GetECPrivateKey(raw []byte) (*ecdsa.PrivateKey, error) {
 		}
 	}
 	return nil, errors.Wrap(err, "Failed parsing EC private key")
+}
+
+// RandomUInt64 returns a random uint64
+func RandomUInt64() uint64 {
+	b := make([]byte, 8)
+	_, err := io.ReadFull(cryptorand.Reader, b)
+	if err == nil {
+		n := new(big.Int)
+		return n.SetBytes(b).Uint64()
+	}
+	rand.Seed(rand.Int63())
+	return uint64(rand.Int63())
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/rkcloudchain/rksync/lib"
 	"github.com/rkcloudchain/rksync/logging"
 	"github.com/rkcloudchain/rksync/protos"
+	"github.com/rkcloudchain/rksync/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 )
@@ -30,6 +31,29 @@ const (
 	defRecvBuffSize  = 20
 	defSendBuffSize  = 20
 )
+
+// NewServer creates a new Server instance that binds itself to the given gRPC server
+func NewServer(s *grpc.Server, cert tls.Certificate, idMapper identity.Identity, selfIdentity common.PeerIdentityType,
+	secureDialOpts func() []grpc.DialOption) *Server {
+
+	srv := &Server{
+		pubSub:         lib.NewPubSub(),
+		pkiID:          idMapper.GetPKIidOfCert(selfIdentity),
+		idMapper:       idMapper,
+		peerIdentity:   selfIdentity,
+		secureDialOpts: secureDialOpts,
+		gSrv:           s,
+		msgPublisher:   NewChannelDemultiplexer(),
+		deadEndpoints:  make(chan common.PKIidType, 100),
+		stopping:       int32(0),
+		exitChan:       make(chan struct{}),
+		subscriptions:  make([]chan protos.ReceivedMessage, 0),
+		tlsCert:        cert,
+	}
+	srv.connStore = newConnStore(srv.createConnection)
+	protos.RegisterRKSyncServer(s, srv)
+	return srv
+}
 
 // Server is an object that enables to communicate with other peers
 type Server struct {
@@ -115,6 +139,93 @@ func (s *Server) createConnection(endpoint string, expectedPKIID common.PKIidTyp
 	cc.Close()
 	cancel()
 	return nil, errors.WithStack(err)
+}
+
+// Send sends a message to remote peers
+func (s *Server) Send(msg *protos.SignedRKSyncMessage, peers ...*common.NetworkMember) {
+	if s.isStopping() || len(peers) == 0 {
+		return
+	}
+	logging.Debug("Entering, sending", msg, "to ", len(peers), "peers")
+
+	for _, peer := range peers {
+		go func(peer *common.NetworkMember, msg *protos.SignedRKSyncMessage) {
+			s.sendToEndpoint(peer, msg, false)
+		}(peer, msg)
+	}
+}
+
+// SendWithAck sends a message to remote peers, waiting for acknowledgement from minAck of them, or until a certain timeout expires
+func (s *Server) SendWithAck(msg *protos.SignedRKSyncMessage, timeout time.Duration, minAck int, peers ...*common.NetworkMember) AggregatedSendResult {
+	if len(peers) == 0 {
+		return nil
+	}
+
+	var err error
+	msg.Nonce = util.RandomUInt64()
+	msg, err = msg.NoopSign()
+
+	if s.isStopping() || err != nil {
+		if err == nil {
+			err = errors.New("Server is stopping")
+		}
+		results := []SendResult{}
+		for _, p := range peers {
+			results = append(results, SendResult{error: err, NetworkMember: *p})
+		}
+		return results
+	}
+
+	logging.Debug("Entering, sending", msg, "to ", len(peers), "peers")
+	sndFunc := func(peer *common.NetworkMember, msg *protos.SignedRKSyncMessage) {
+		s.sendToEndpoint(peer, msg, true)
+	}
+
+	subscriptions := make(map[string]func() error)
+	for _, p := range peers {
+		topic := topicForAck(msg.Nonce, p.PKIID)
+		sub := s.pubSub.Subscribe(topic, timeout)
+		subscriptions[string(p.PKIID)] = func() error {
+			msg, err := sub.Listen()
+			if err != nil {
+				return err
+			}
+			ackMsg, isAck := msg.(*protos.Acknowledgement)
+			if !isAck {
+				return errors.Errorf("Received a message of type %s, expected *protos.Acknowledgement", reflect.TypeOf(msg))
+			}
+			if ackMsg.Error != "" {
+				return errors.New(ackMsg.Error)
+			}
+			return nil
+		}
+	}
+
+	waitForAck := func(p *common.NetworkMember) error {
+		return subscriptions[string(p.PKIID)]()
+	}
+	ackOperation := newAckSendOperation(sndFunc, waitForAck)
+	return ackOperation.send(msg, minAck, peers...)
+}
+
+func (s *Server) sendToEndpoint(peer *common.NetworkMember, msg *protos.SignedRKSyncMessage, shouldBlock bool) {
+	if s.isStopping() {
+		return
+	}
+	logging.Debug("Entering, Sending to", peer.Endpoint, ", msg", msg)
+	defer logging.Debug("Exiting")
+
+	conn, err := s.connStore.getConnection(peer)
+	if err == nil {
+		disConnectOnErr := func(err error) {
+			logging.Warningf("%v isn't responsive: %v", peer.Endpoint, err)
+			s.disconnect(peer.PKIID)
+		}
+		conn.send(msg, disConnectOnErr, shouldBlock)
+		return
+	}
+	logging.Warningf("Failed obtaining connection for %v reason: %v", peer.Endpoint, err)
+	s.disconnect(peer.PKIID)
 }
 
 // Accept returns a dedicated read-only channel for messages sent by other nodes that match a certain predicate.
@@ -235,6 +346,11 @@ func (s *Server) Probe(remotePeer *common.NetworkMember) error {
 func (s *Server) CloseConn(peer *common.NetworkMember) {
 	logging.Debug("Closing connection for", peer.Endpoint)
 	s.connStore.closeConn(peer)
+}
+
+// PresumedDead returns a read-only channel for node endpoints that are suspected to be offline
+func (s *Server) PresumedDead() <-chan common.PKIidType {
+	return s.deadEndpoints
 }
 
 func (s *Server) closeSubscriptions() {
