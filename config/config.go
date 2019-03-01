@@ -15,9 +15,8 @@ var (
 	}
 )
 
-// Config is the configuration of the rksync component
-type Config struct {
-	BindAddress         string   // Address we bind to
+// GossipConfig is the configuration of the rksync component
+type GossipConfig struct {
 	BindPort            int      // Port we bind to
 	BootstrapPeers      []string // Peers we connect to at startup
 	PropagateIterations int      // Number of times a message is pushed to remote peer

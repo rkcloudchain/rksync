@@ -16,8 +16,8 @@ func (p PKIidType) String() string {
 // PeerIdentityType is the peer's certificate
 type PeerIdentityType []byte
 
-// RemotePeer defines a peer's endpoint and its PKIid
-type RemotePeer struct {
+// NetworkMember defines a peer's endpoint and its PKIid
+type NetworkMember struct {
 	Endpoint string
 	PKIID    PKIidType
 }

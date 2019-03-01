@@ -8,6 +8,30 @@ import (
 	"github.com/rkcloudchain/rksync/common"
 )
 
+// ReceivedMessage is a RKSyncMessage wrapper that
+// enables the user to send a message to the origin from which
+// the ReceivedMessage was sent from.
+type ReceivedMessage interface {
+	// Respond sends a RKSyncMessage to the origin from which this ReceivedMessage was sent from
+	Respond(msg *RKSyncMessage)
+
+	// GetRKSyncMessage returns the underlying RKSyncMessage
+	GetRKSyncMessage() *SignedRKSyncMessage
+
+	// GetSourceMessage Returns the Envelope the ReceivedMessage was
+	// constructed with
+	GetSourceEnvelope() *Envelope
+
+	// GetConnectionInfo returns information about the remote peer
+	// that sent the message
+	GetConnectionInfo() *ConnectionInfo
+
+	// Ack returns to the sender an acknowledgement for the message
+	// An ack can receive an error that indicates that the operation related
+	// to the message has failed
+	Ack(err error)
+}
+
 // SignedRKSyncMessage contains a GossipMessage
 // and the Envelope from which it came from
 type SignedRKSyncMessage struct {
@@ -15,7 +39,7 @@ type SignedRKSyncMessage struct {
 	*RKSyncMessage
 }
 
-// String returns a string representation of a SignedGossipMessage
+// String returns a string representation of a SignedRKSyncMessage
 func (m *SignedRKSyncMessage) String() string {
 	return ""
 }
@@ -41,7 +65,7 @@ type Verifier func(peerIdentity []byte, signature, message []byte) error
 // on success, and nil and an error on failure
 type Signer func(msg []byte) ([]byte, error)
 
-// ToRKSyncMessage unmarshals a given envelope and creates a SignedGossipMessage
+// ToRKSyncMessage unmarshals a given envelope and creates a SignedRKSyncMessage
 // out of it.
 func (e *Envelope) ToRKSyncMessage() (*SignedRKSyncMessage, error) {
 	if e == nil {
@@ -98,4 +122,19 @@ func (m *SignedRKSyncMessage) Verify(peerIdentity []byte, verify Verifier) error
 		return payloadSigVerificationErr
 	}
 	return nil
+}
+
+// NoopSign creates a SignedRKSyncMessage with a nil signature
+func (m *RKSyncMessage) NoopSign() (*SignedRKSyncMessage, error) {
+	signer := func(msg []byte) ([]byte, error) {
+		return nil, nil
+	}
+	sMsg := &SignedRKSyncMessage{RKSyncMessage: m}
+	_, err := sMsg.Sign(signer)
+	return sMsg, err
+}
+
+// IsAck returns whether this RKSyncMessage is an acknowledgement
+func (m *RKSyncMessage) IsAck() bool {
+	return m.GetAck() != nil
 }

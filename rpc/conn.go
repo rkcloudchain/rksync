@@ -13,29 +13,26 @@ import (
 )
 
 type handler func(message *protos.SignedRKSyncMessage)
-
-type connFactory interface {
-	createConnection(endpoint string, pkiID common.PKIidType) (*connection, error)
-}
+type connCreation func(endpoint string, pkiID common.PKIidType) (*connection, error)
 
 type connectionStore struct {
-	isClosing   bool
-	connFactory connFactory
+	isClosing    bool
+	connCreation connCreation
 	sync.RWMutex
 	conns            map[string]*connection
 	destinationLocks map[string]*sync.Mutex
 }
 
-func newConnStore(connFactory connFactory) *connectionStore {
+func newConnStore(connCreation connCreation) *connectionStore {
 	return &connectionStore{
-		connFactory:      connFactory,
+		connCreation:     connCreation,
 		isClosing:        false,
 		conns:            make(map[string]*connection),
 		destinationLocks: make(map[string]*sync.Mutex),
 	}
 }
 
-func (cs *connectionStore) getConnection(peer *common.RemotePeer) (*connection, error) {
+func (cs *connectionStore) getConnection(peer *common.NetworkMember) (*connection, error) {
 	cs.RLock()
 	isClosing := cs.isClosing
 	cs.RUnlock()
@@ -66,7 +63,7 @@ func (cs *connectionStore) getConnection(peer *common.RemotePeer) (*connection, 
 	}
 	cs.RUnlock()
 
-	createdConnection, err := cs.connFactory.createConnection(endpoint, pkiID)
+	createdConnection, err := cs.connCreation(endpoint, pkiID)
 	destinationLock.Unlock()
 
 	cs.RLock()
@@ -105,7 +102,7 @@ func (cs *connectionStore) connNum() int {
 	return len(cs.conns)
 }
 
-func (cs *connectionStore) closeConn(peer *common.RemotePeer) {
+func (cs *connectionStore) closeConn(peer *common.NetworkMember) {
 	cs.Lock()
 	defer cs.Unlock()
 

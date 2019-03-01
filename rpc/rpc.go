@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/hex"
+	"fmt"
 	"net"
 	"reflect"
 	"sync"
@@ -14,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/identity"
+	"github.com/rkcloudchain/rksync/lib"
 	"github.com/rkcloudchain/rksync/logging"
 	"github.com/rkcloudchain/rksync/protos"
 	"google.golang.org/grpc"
@@ -21,25 +24,32 @@ import (
 )
 
 const (
-	defDialTimeout  = time.Second * time.Duration(3)
-	defConnTimeout  = time.Second * time.Duration(2)
-	defRecvBuffSize = 20
-	defSendBuffSize = 20
+	handshakeTimeout = time.Second * time.Duration(10)
+	defDialTimeout   = time.Second * time.Duration(3)
+	defConnTimeout   = time.Second * time.Duration(2)
+	defRecvBuffSize  = 20
+	defSendBuffSize  = 20
 )
 
 // Server is an object that enables to communicate with other peers
 type Server struct {
 	secureDialOpts func() []grpc.DialOption
 	tlsCert        tls.Certificate
+	pubSub         *lib.PubSub
 	gSrv           *grpc.Server
 	lsnr           net.Listener
 	connStore      *connectionStore
 	idMapper       identity.Identity
 	peerIdentity   common.PeerIdentityType
 	pkiID          common.PKIidType
-	lock           *sync.Mutex
+	lock           sync.Mutex
 	stopping       int32
 	useTLS         bool
+	stopWG         sync.WaitGroup
+	exitChan       chan struct{}
+	deadEndpoints  chan common.PKIidType
+	msgPublisher   *ChannelDeMultiplexer
+	subscriptions  []chan protos.ReceivedMessage
 }
 
 func (s *Server) createConnection(endpoint string, expectedPKIID common.PKIidType) (*connection, error) {
@@ -79,17 +89,24 @@ func (s *Server) createConnection(endpoint string, expectedPKIID common.PKIidTyp
 	if stream, err = cl.SyncStream(ctx); err == nil {
 		connInfo, err = s.authenticateRemotePeer(stream)
 		if err == nil {
+			if expectedPKIID != nil && !bytes.Equal(connInfo.ID, expectedPKIID) {
+				logging.Warning("Remote endpoint claims to be a different peer, expected", expectedPKIID, "but got", connInfo.ID)
+			}
+
 			conn := newConnection(cc, stream, nil)
 			conn.info = connInfo
 			conn.cancel = cancel
 
 			h := func(m *protos.SignedRKSyncMessage) {
 				logging.Debug("Got message:", m)
-
-				// TODO: Channel DeMultiplexer
-
+				s.msgPublisher.DeMultiplex(&ReceivedMessageImpl{
+					conn:                conn,
+					lock:                conn,
+					SignedRKSyncMessage: m,
+					connInfo:            connInfo,
+				})
 			}
-			conn.handler = interceptAcks(h, connInfo.ID)
+			conn.handler = interceptAcks(h, connInfo.ID, s.pubSub)
 			return conn, nil
 		}
 
@@ -100,9 +117,89 @@ func (s *Server) createConnection(endpoint string, expectedPKIID common.PKIidTyp
 	return nil, errors.WithStack(err)
 }
 
+// Accept returns a dedicated read-only channel for messages sent by other nodes that match a certain predicate.
+func (s *Server) Accept(acceptor common.MessageAcceptor) <-chan protos.ReceivedMessage {
+	genericChan := s.msgPublisher.AddChannel(acceptor)
+	specificChan := make(chan protos.ReceivedMessage, 10)
+
+	if s.isStopping() {
+		logging.Warning("Accept() called but server is stopping, returning empty channel")
+		return specificChan
+	}
+
+	s.lock.Lock()
+	s.subscriptions = append(s.subscriptions, specificChan)
+	s.lock.Unlock()
+
+	s.stopWG.Add(1)
+	go func() {
+		defer logging.Debug("Exiting Accept() loop")
+		defer s.stopWG.Done()
+
+		for {
+			select {
+			case msg := <-genericChan:
+				if msg == nil {
+					return
+				}
+				select {
+				case specificChan <- msg.(*ReceivedMessageImpl):
+				case <-s.exitChan:
+					return
+				}
+			case <-s.exitChan:
+				return
+			}
+		}
+	}()
+
+	return specificChan
+}
+
+// Handshake authenticates a remote peer and returns
+// (its identity, nil) on success and (nil, error)
+func (s *Server) Handshake(peer *common.NetworkMember) (common.PeerIdentityType, error) {
+	var dialOpts []grpc.DialOption
+	dialOpts = append(dialOpts, s.secureDialOpts()...)
+	dialOpts = append(dialOpts, grpc.WithBlock())
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, defDialTimeout)
+	defer cancel()
+
+	cc, err := grpc.DialContext(ctx, peer.Endpoint, dialOpts...)
+	if err != nil {
+		return nil, err
+	}
+	defer cc.Close()
+
+	cl := protos.NewRKSyncClient(cc)
+	ctx, cancel = context.WithTimeout(context.Background(), defConnTimeout)
+	defer cancel()
+	if _, err = cl.Ping(ctx, &empty.Empty{}); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), handshakeTimeout)
+	defer cancel()
+	stream, err := cl.SyncStream(ctx)
+	if err != nil {
+		return nil, err
+	}
+	connInfo, err := s.authenticateRemotePeer(stream)
+	if err != nil {
+		logging.Warningf("Authentication failed: %v", err)
+		return nil, err
+	}
+
+	if len(peer.PKIID) > 0 && !bytes.Equal(connInfo.ID, peer.PKIID) {
+		return nil, errors.New("PKI-ID of remote peer doesn't match expected PKI-ID")
+	}
+	return connInfo.Identity, nil
+}
+
 // Probe probes a remote node and returns nil if its responsive,
 // and an error if it's not
-func (s *Server) Probe(remotePeer *common.RemotePeer) error {
+func (s *Server) Probe(remotePeer *common.NetworkMember) error {
 	var dialOpts []grpc.DialOption
 	endpoint := remotePeer.Endpoint
 	pkiID := remotePeer.PKIID
@@ -132,6 +229,84 @@ func (s *Server) Probe(remotePeer *common.RemotePeer) error {
 	_, err = cl.Ping(ctx, &empty.Empty{})
 	logging.Debugf("Returning %v", err)
 	return err
+}
+
+// CloseConn closes a connection to a certain endpoint
+func (s *Server) CloseConn(peer *common.NetworkMember) {
+	logging.Debug("Closing connection for", peer.Endpoint)
+	s.connStore.closeConn(peer)
+}
+
+func (s *Server) closeSubscriptions() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	for _, ch := range s.subscriptions {
+		close(ch)
+	}
+}
+
+// Stop stop the server
+func (s *Server) Stop() {
+	if !atomic.CompareAndSwapInt32(&s.stopping, 0, int32(1)) {
+		return
+	}
+	logging.Info("Stopping")
+	defer logging.Info("Stopped")
+	if s.gSrv != nil {
+		s.gSrv.Stop()
+	}
+	s.connStore.shutdown()
+	logging.Debug("Shut down connection store, connection count:", s.connStore.connNum())
+	s.msgPublisher.Close()
+	close(s.exitChan)
+	s.stopWG.Wait()
+	s.closeSubscriptions()
+}
+
+// SyncStream is the gRPC stream used for sending and receiving messages
+func (s *Server) SyncStream(stream protos.RKSync_SyncStreamServer) error {
+	if s.isStopping() {
+		return errors.New("Shutting down")
+	}
+	connInfo, err := s.authenticateRemotePeer(stream)
+	if err != nil {
+		logging.Errorf("Authentication failed: %v", err)
+		return err
+	}
+	logging.Debug("Servicing", extractRemoteAddress(stream))
+
+	conn := s.connStore.onConnected(stream, connInfo)
+
+	h := func(m *protos.SignedRKSyncMessage) {
+		s.msgPublisher.DeMultiplex(&ReceivedMessageImpl{
+			conn:                conn,
+			lock:                conn,
+			SignedRKSyncMessage: m,
+			connInfo:            connInfo,
+		})
+	}
+	conn.handler = h
+
+	defer func() {
+		logging.Debug("Client", extractRemoteAddress(stream), "disconnected")
+		s.connStore.closeByPKIid(connInfo.ID)
+		conn.close()
+	}()
+
+	return conn.serviceConnection()
+}
+
+// Ping is used to probe a remote peer's aliveness
+func (s *Server) Ping(context.Context, *empty.Empty) (*empty.Empty, error) {
+	return &empty.Empty{}, nil
+}
+
+func (s *Server) disconnect(pkiID common.PKIidType) {
+	if s.isStopping() {
+		return
+	}
+	s.deadEndpoints <- pkiID
+	s.connStore.closeByPKIid(pkiID)
 }
 
 func (s *Server) authenticateRemotePeer(stream stream) (*protos.ConnectionInfo, error) {
@@ -283,4 +458,8 @@ func readWithTimeout(stream interface{}, timeout time.Duration, address string) 
 	case err := <-errChan:
 		return nil, errors.WithStack(err)
 	}
+}
+
+func topicForAck(nonce uint64, pkiID common.PKIidType) string {
+	return fmt.Sprintf("%d-%s", nonce, hex.EncodeToString(pkiID))
 }

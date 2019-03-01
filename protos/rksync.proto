@@ -25,16 +25,18 @@ message Payload {
 }
 
 message RKSyncMessage {
-    bytes channel = 1;
+    uint64 nonce = 1;
+    bytes channel = 2;
     enum Tag {
         EMPTY     = 0;
         CHAN_ONLY = 1;
     }
-    Tag tag = 2;
+    Tag tag = 3;
     oneof content {
-        AliveMessage alive_msg = 4;
-        google.protobuf.Empty empty = 5;
-        ConnEstablish conn = 6;
+        AliveMessage alive_msg = 5;
+        google.protobuf.Empty empty = 6;
+        ConnEstablish conn = 7;
+        Acknowledgement ack = 8;
     }
 }
 
@@ -58,4 +60,8 @@ message PeerTime {
 message Member {
     string endpoint = 1;
     bytes pki_id = 2;
+}
+
+message Acknowledgement {
+    string error = 1;
 }
