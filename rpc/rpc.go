@@ -3,7 +3,6 @@ package rpc
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -33,7 +32,7 @@ const (
 )
 
 // NewServer creates a new Server instance that binds itself to the given gRPC server
-func NewServer(s *grpc.Server, cert tls.Certificate, idMapper identity.Identity, selfIdentity common.PeerIdentityType,
+func NewServer(s *grpc.Server, idMapper identity.Identity, selfIdentity common.PeerIdentityType,
 	secureDialOpts func() []grpc.DialOption) *Server {
 
 	srv := &Server{
@@ -48,7 +47,6 @@ func NewServer(s *grpc.Server, cert tls.Certificate, idMapper identity.Identity,
 		stopping:       int32(0),
 		exitChan:       make(chan struct{}),
 		subscriptions:  make([]chan protos.ReceivedMessage, 0),
-		tlsCert:        cert,
 	}
 	srv.connStore = newConnStore(srv.createConnection)
 	protos.RegisterRKSyncServer(s, srv)
@@ -58,7 +56,6 @@ func NewServer(s *grpc.Server, cert tls.Certificate, idMapper identity.Identity,
 // Server is an object that enables to communicate with other peers
 type Server struct {
 	secureDialOpts func() []grpc.DialOption
-	tlsCert        tls.Certificate
 	pubSub         *lib.PubSub
 	gSrv           *grpc.Server
 	lsnr           net.Listener
@@ -68,7 +65,6 @@ type Server struct {
 	pkiID          common.PKIidType
 	lock           sync.Mutex
 	stopping       int32
-	useTLS         bool
 	stopWG         sync.WaitGroup
 	exitChan       chan struct{}
 	deadEndpoints  chan common.PKIidType
@@ -426,22 +422,11 @@ func (s *Server) disconnect(pkiID common.PKIidType) {
 }
 
 func (s *Server) authenticateRemotePeer(stream stream) (*protos.ConnectionInfo, error) {
-	ctx := stream.Context()
 	remoteAddress := extractRemoteAddress(stream)
-	remoteCertHash := extractCertificateHashFromContext(ctx)
 
 	var err error
 	var cMsg *protos.SignedRKSyncMessage
 	var selfCertHash []byte
-
-	if s.useTLS {
-		selfCertHash = certHashFromRawCert(s.tlsCert.Certificate[0])
-	}
-
-	if s.useTLS && len(remoteCertHash) == 0 {
-		logging.Warningf("%s didn't send TLS certificate", remoteAddress)
-		return nil, errors.Errorf("No TLS certificate")
-	}
 
 	signer := func(msg []byte) ([]byte, error) {
 		return s.idMapper.Sign(msg)
@@ -484,12 +469,6 @@ func (s *Server) authenticateRemotePeer(stream stream) (*protos.ConnectionInfo, 
 		Endpoint: remoteAddress,
 	}
 
-	if s.useTLS {
-		if !bytes.Equal(remoteCertHash, receivedMsg.TlsCertHash) {
-			return nil, errors.Errorf("Expected %v in remote hash of TLS cert, but got %v", remoteCertHash, receivedMsg.TlsCertHash)
-		}
-	}
-
 	verifier := func(peerIdentity []byte, signature, message []byte) error {
 		pkiID := s.idMapper.GetPKIidOfCert(common.PeerIdentityType(peerIdentity))
 		return s.idMapper.Verify(pkiID, signature, message)
@@ -510,9 +489,8 @@ func (s *Server) createConnectionMsg(pkiID common.PKIidType, certHash []byte, ce
 		Tag: protos.RKSyncMessage_EMPTY,
 		Content: &protos.RKSyncMessage_Conn{
 			Conn: &protos.ConnEstablish{
-				Identity:    cert,
-				PkiId:       pkiID,
-				TlsCertHash: certHash,
+				Identity: cert,
+				PkiId:    pkiID,
 			},
 		},
 	}

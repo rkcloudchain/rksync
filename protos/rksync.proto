@@ -37,13 +37,14 @@ message RKSyncMessage {
         google.protobuf.Empty empty = 6;
         ConnEstablish conn = 7;
         Acknowledgement ack = 8;
+        MembershipRequest mem_req = 9;
+        MembershipResponse mem_res = 10;
     }
 }
 
 message ConnEstablish {
     bytes pki_id = 1;
     bytes identity = 2;
-    bytes tls_cert_hash = 3;
 }
 
 message AliveMessage {
@@ -64,4 +65,14 @@ message Member {
 
 message Acknowledgement {
     string error = 1;
+}
+
+message MembershipRequest {
+    Envelope self_information = 1;
+    repeated bytes known = 2;
+}
+
+message MembershipResponse {
+    repeated Envelope alive = 1;
+    repeated Envelope dead = 2;
 }

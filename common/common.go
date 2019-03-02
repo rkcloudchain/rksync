@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 )
@@ -14,6 +15,13 @@ func (p PKIidType) String() string {
 		return "<nil>"
 	}
 	return hex.EncodeToString(p)
+}
+
+// IsNotSameFilter generate filter function which provides
+// a predicate to identify whenever current id
+// equals to another one.
+func (p PKIidType) IsNotSameFilter(that PKIidType) bool {
+	return !bytes.Equal(p, that)
 }
 
 // PeerIdentityType is the peer's certificate
@@ -34,3 +42,27 @@ func (p *NetworkMember) String() string {
 // determine in which messages the subscriber that created the
 // instance of the MessageAcceptor is interested in.
 type MessageAcceptor func(interface{}) bool
+
+// PeerSuspector returns whether a peer with a given identity is suspected
+// as being revoked, or its CA is revoked
+type PeerSuspector func(identity PeerIdentityType) bool
+
+// MessageReplcaingPolicy returns:
+// - MessageInvalidates if this message invalidates that
+// - MessageInvalidated if this message is invalidated by that
+// - MessageNoAction otherwise
+type MessageReplcaingPolicy func(this interface{}, that interface{}) InvalidationResult
+
+// InvalidationResult determines how a message offects another message
+type InvalidationResult int
+
+const (
+	// MessageNoAction means messages have no relation
+	MessageNoAction InvalidationResult = iota
+
+	// MessageInvalidates means message invalidates the other message
+	MessageInvalidates
+
+	// MessageInvalidated means message is invalidated by the other message
+	MessageInvalidated
+)

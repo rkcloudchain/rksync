@@ -1,6 +1,9 @@
 package config
 
-import "crypto/tls"
+import (
+	"crypto/tls"
+	"time"
+)
 
 // Configuration defaults
 var (
@@ -17,11 +20,13 @@ var (
 
 // GossipConfig is the configuration of the rksync component
 type GossipConfig struct {
-	BindPort            int      // Port we bind to
-	BootstrapPeers      []string // Peers we connect to at startup
-	PropagateIterations int      // Number of times a message is pushed to remote peer
-	PropagatePeerNum    int      // Number of peers selected to push message to
-	Endpoint            string   // Peer endpoint
+	BindPort                   int           // Port we bind to
+	BootstrapPeers             []string      // Peers we connect to at startup
+	PropagateIterations        int           // Number of times a message is pushed to remote peer
+	PropagatePeerNum           int           // Number of peers selected to push message to
+	Endpoint                   string        // Peer endpoint
+	MaxPropagationBurstSize    int           // Max number of messages stored until it triggers a push to remote peers
+	MaxPropagationBurstLatency time.Duration // Max time between consecutive message pushes
 }
 
 // IdentityConfig defines the identity parameters for peer

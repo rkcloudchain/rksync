@@ -1,12 +1,55 @@
 package protos
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/common"
 )
+
+// NewRKSyncMessageComparator creates a MessageReplcaingPolicy
+func NewRKSyncMessageComparator() common.MessageReplcaingPolicy {
+	return func(this interface{}, that interface{}) common.InvalidationResult {
+		return invalidationPolicy(this, that)
+	}
+}
+
+func invalidationPolicy(this interface{}, that interface{}) common.InvalidationResult {
+	thisMsg := this.(*SignedRKSyncMessage)
+	thatMsg := that.(*SignedRKSyncMessage)
+
+	if thisMsg.IsAliveMsg() && thatMsg.IsAliveMsg() {
+		return aliveInvalidationPolicy(thisMsg.GetAliveMsg(), thatMsg.GetAliveMsg())
+	}
+
+	return common.MessageNoAction
+}
+
+func aliveInvalidationPolicy(this *AliveMessage, that *AliveMessage) common.InvalidationResult {
+	if !bytes.Equal(this.Membership.PkiId, that.Membership.PkiId) {
+		return common.MessageNoAction
+	}
+
+	return compareTimestamps(this.Timestamp, that.Timestamp)
+}
+
+func compareTimestamps(thisTS *PeerTime, thatTS *PeerTime) common.InvalidationResult {
+	if thisTS.IncNum == thatTS.IncNum {
+		if thisTS.SeqNum > thatTS.SeqNum {
+			return common.MessageInvalidates
+		}
+
+		return common.MessageInvalidated
+	}
+
+	if thisTS.IncNum < thatTS.IncNum {
+		return common.MessageInvalidated
+	}
+
+	return common.MessageInvalidates
+}
 
 // ReceivedMessage is a RKSyncMessage wrapper that
 // enables the user to send a message to the origin from which
@@ -32,7 +75,7 @@ type ReceivedMessage interface {
 	Ack(err error)
 }
 
-// SignedRKSyncMessage contains a GossipMessage
+// SignedRKSyncMessage contains a RKSyncMessage
 // and the Envelope from which it came from
 type SignedRKSyncMessage struct {
 	*Envelope
@@ -137,4 +180,9 @@ func (m *RKSyncMessage) NoopSign() (*SignedRKSyncMessage, error) {
 // IsAck returns whether this RKSyncMessage is an acknowledgement
 func (m *RKSyncMessage) IsAck() bool {
 	return m.GetAck() != nil
+}
+
+// IsAliveMsg returns whether this RKSyncMessage is an AliveMessage
+func (m *RKSyncMessage) IsAliveMsg() bool {
+	return m.GetAliveMsg() != nil
 }
