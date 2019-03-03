@@ -167,6 +167,11 @@ func (m *SignedRKSyncMessage) Verify(peerIdentity []byte, verify Verifier) error
 	return nil
 }
 
+// IsSigned returns whether the message has a signature in the envelope
+func (m *SignedRKSyncMessage) IsSigned() bool {
+	return m.Envelope != nil && m.Envelope.Payload != nil && m.Envelope.Signature != nil
+}
+
 // NoopSign creates a SignedRKSyncMessage with a nil signature
 func (m *RKSyncMessage) NoopSign() (*SignedRKSyncMessage, error) {
 	signer := func(msg []byte) ([]byte, error) {
@@ -185,4 +190,16 @@ func (m *RKSyncMessage) IsAck() bool {
 // IsAliveMsg returns whether this RKSyncMessage is an AliveMessage
 func (m *RKSyncMessage) IsAliveMsg() bool {
 	return m.GetAliveMsg() != nil
+}
+
+// IsTagLegal checks the RKSyncMessage tags and inner type
+func (m *RKSyncMessage) IsTagLegal() error {
+	if m.IsAliveMsg() || m.GetMemReq() != nil || m.GetMemRes() != nil {
+		if m.Tag != RKSyncMessage_EMPTY {
+			return fmt.Errorf("Tag should be %s", RKSyncMessage_Tag_name[int32(RKSyncMessage_EMPTY)])
+		}
+		return nil
+	}
+
+	return fmt.Errorf("Unknown message type: %v", m)
 }

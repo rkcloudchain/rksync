@@ -137,6 +137,11 @@ func (s *Server) createConnection(endpoint string, expectedPKIID common.PKIidTyp
 	return nil, errors.WithStack(err)
 }
 
+// GetPKIid returns this instance's PKI id
+func (s *Server) GetPKIid() common.PKIidType {
+	return s.pkiID
+}
+
 // Send sends a message to remote peers
 func (s *Server) Send(msg *protos.SignedRKSyncMessage, peers ...*common.NetworkMember) {
 	if s.isStopping() || len(peers) == 0 {

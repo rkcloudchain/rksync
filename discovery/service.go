@@ -247,7 +247,8 @@ func (d *gossipDiscoveryService) createMembershipRequest() (*protos.RKSyncMessag
 
 	req := &protos.MembershipRequest{
 		SelfInformation: am.Envelope,
-		Known:           [][]byte{},
+		// TODO: sending the known peers
+		Known: [][]byte{},
 	}
 
 	return &protos.RKSyncMessage{
