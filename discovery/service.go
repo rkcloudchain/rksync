@@ -132,6 +132,25 @@ func (d *gossipDiscoveryService) Connect(member common.NetworkMember, id identif
 	}()
 }
 
+func (d *gossipDiscoveryService) Lookup(pkiID common.PKIidType) *common.NetworkMember {
+	if bytes.Equal(pkiID, d.self.PKIID) {
+		return &d.self
+	}
+	d.lock.RLock()
+	defer d.lock.RUnlock()
+	return copyNetworkMember(d.id2Member[string(pkiID)])
+}
+
+func copyNetworkMember(member *common.NetworkMember) *common.NetworkMember {
+	if member == nil {
+		return nil
+	}
+
+	copied := &common.NetworkMember{}
+	*copied = *member
+	return copied
+}
+
 func (d *gossipDiscoveryService) InitiateSync(peerNum int) {
 	if d.toDie() {
 		return

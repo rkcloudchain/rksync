@@ -39,6 +39,10 @@ message RKSyncMessage {
         Acknowledgement ack = 8;
         MembershipRequest mem_req = 9;
         MembershipResponse mem_res = 10;
+        ChainState state = 11;
+        ChainStatePullRequest state_pull_request = 12;
+        ChainStatePullResponse state_pull_response = 13;
+        ChainStateInfo state_info = 14;
     }
 }
 
@@ -75,4 +79,37 @@ message MembershipRequest {
 message MembershipResponse {
     repeated Envelope alive = 1;
     repeated Envelope dead = 2;
+}
+
+message ChainState {
+    uint64 seq_num = 1;
+    bytes chain_mac = 2;
+    Envelope envelope = 3;
+}
+
+message ChainStateInfo {
+    bytes leader = 1;
+    Properties properties = 2;
+}
+
+message Properties {
+    repeated bytes members = 1;
+    repeated File files = 2;
+}
+
+message File {
+    string path = 1;
+    enum Mode {
+        Append = 0;
+        Random = 1;
+    }
+    Mode mode = 2;
+}
+
+message ChainStatePullResponse {
+    Envelope element = 1;
+}
+
+message ChainStatePullRequest {
+    bytes chain_mac = 1;
 }

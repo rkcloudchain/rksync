@@ -23,6 +23,12 @@ func invalidationPolicy(this interface{}, that interface{}) common.InvalidationR
 	if thisMsg.IsAliveMsg() && thatMsg.IsAliveMsg() {
 		return aliveInvalidationPolicy(thisMsg.GetAliveMsg(), thatMsg.GetAliveMsg())
 	}
+	if thisMsg.IsChainStateMsg() && thatMsg.IsChainStateMsg() {
+		if !bytes.Equal(thisMsg.RKSyncMessage.Channel, thatMsg.RKSyncMessage.Channel) {
+			return common.MessageNoAction
+		}
+		return stateInvalidationPolicy(thisMsg.GetState(), thatMsg.GetState())
+	}
 
 	return common.MessageNoAction
 }
@@ -33,6 +39,13 @@ func aliveInvalidationPolicy(this *AliveMessage, that *AliveMessage) common.Inva
 	}
 
 	return compareTimestamps(this.Timestamp, that.Timestamp)
+}
+
+func stateInvalidationPolicy(this *ChainState, that *ChainState) common.InvalidationResult {
+	if this.SeqNum > that.SeqNum {
+		return common.MessageInvalidates
+	}
+	return common.MessageInvalidated
 }
 
 func compareTimestamps(thisTS *PeerTime, thatTS *PeerTime) common.InvalidationResult {
@@ -192,6 +205,26 @@ func (m *RKSyncMessage) IsAliveMsg() bool {
 	return m.GetAliveMsg() != nil
 }
 
+// IsChainStateMsg returns whether this RKSyncMessage is a chain state message
+func (m *RKSyncMessage) IsChainStateMsg() bool {
+	return m.GetState() != nil
+}
+
+// IsStatePullRequestMsg returns wether this RKSyncMessage is a state pull request
+func (m *RKSyncMessage) IsStatePullRequestMsg() bool {
+	return m.GetStatePullRequest() != nil
+}
+
+// IsStatePullResponseMsg returns wether this RKSyncMessage is a state pull response
+func (m *RKSyncMessage) IsStatePullResponseMsg() bool {
+	return m.GetStatePullResponse() != nil
+}
+
+// IsStateInfoMsg returns wether this RKSyncMessage is a state info message
+func (m *RKSyncMessage) IsStateInfoMsg() bool {
+	return m.GetStateInfo() != nil
+}
+
 // IsTagLegal checks the RKSyncMessage tags and inner type
 func (m *RKSyncMessage) IsTagLegal() error {
 	if m.IsAliveMsg() || m.GetMemReq() != nil || m.GetMemRes() != nil {
@@ -202,4 +235,36 @@ func (m *RKSyncMessage) IsTagLegal() error {
 	}
 
 	return fmt.Errorf("Unknown message type: %v", m)
+}
+
+// IsChannelRestricted returns whether this RKSyncMessage should be routed only in its channel
+func (m *RKSyncMessage) IsChannelRestricted() bool {
+	return m.Tag == RKSyncMessage_CHAN_ONLY
+}
+
+// GetChainStateInfo ...
+func (m *ChainState) GetChainStateInfo() (*ChainStateInfo, error) {
+	csi := &ChainStateInfo{}
+	err := proto.Unmarshal(m.Envelope.Payload, csi)
+	return csi, err
+}
+
+// Sign signs a ChainStateInfo with given Signer.
+func (si *ChainStateInfo) Sign(signer Signer) (*Envelope, error) {
+	payload, err := proto.Marshal(si)
+	if err != nil {
+		return nil, err
+	}
+
+	sig, err := signer(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	e := &Envelope{
+		Payload:   payload,
+		Signature: sig,
+	}
+
+	return e, nil
 }

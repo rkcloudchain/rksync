@@ -1,9 +1,13 @@
 package gossip
 
 import (
+	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
+	"github.com/rkcloudchain/rksync/filter"
 	"github.com/rkcloudchain/rksync/protos"
 )
+
+type channelRoutingFilterFactory func(channel.Channel) filter.RoutingFilter
 
 // Gossip is the interface of the gossip component
 type Gossip interface {
@@ -13,11 +17,8 @@ type Gossip interface {
 	// Peers returns the NetworkMembers considered alive
 	Peers() []common.NetworkMember
 
-	// Accept returns a dedicated read-only channel for messages sent by other nodes that match a certain predicate.
-	// If passThrough is false, the messages are processed by the gossip layer beforehand.
-	// If passThrough is true, the gossip layer doesn't intervene and the messages
-	// can be used to send a reply back to the sender
-	Accept(acceptor common.MessageAcceptor, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage)
+	// JoinChan makes the Gossip instance join a channel
+	JoinChan(chainID string, leader bool)
 
 	// Stop the gossip component
 	Stop()

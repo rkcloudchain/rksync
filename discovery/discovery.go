@@ -50,6 +50,9 @@ type Discovery interface {
 	// Connect makes this instance to connect to a remote instance
 	Connect(member common.NetworkMember, id identifier)
 
+	// Lookup returns a network member, or nil if not found
+	Lookup(pkiID common.PKIidType) *common.NetworkMember
+
 	// Stop this instance
 	Stop()
 }

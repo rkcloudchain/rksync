@@ -9,6 +9,9 @@ import (
 
 var noopLock = func() {}
 
+// Noop is a function that doesn't do anything
+func Noop(_ interface{}) {}
+
 type invalidationTrigger func(message interface{})
 
 // MessageStore adds message to an internal buffer

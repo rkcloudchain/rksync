@@ -12,6 +12,7 @@ import (
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/discovery"
 	"github.com/rkcloudchain/rksync/identity"
+	"github.com/rkcloudchain/rksync/lib"
 	"github.com/rkcloudchain/rksync/logging"
 	"github.com/rkcloudchain/rksync/protos"
 	"github.com/rkcloudchain/rksync/rpc"
@@ -35,6 +36,7 @@ func NewGossipService(gConf *config.GossipConfig, idConf *config.IdentityConfig,
 		stopFlag:              int32(0),
 		includeIdentityPeriod: time.Now().Add(gConf.PublishCertPeriod),
 	}
+	g.chainStateMsgStore = g.newChainStateMsgStore()
 
 	var err error
 	g.idMapper, err = identity.NewIdentity(idConf, selfIdentity)
@@ -42,6 +44,8 @@ func NewGossipService(gConf *config.GossipConfig, idConf *config.IdentityConfig,
 		return nil, err
 	}
 
+	g.selfPKIid = g.idMapper.GetPKIidOfCert(selfIdentity)
+	g.chanState = newChannelState(g)
 	g.srv = rpc.NewServer(s, g.idMapper, selfIdentity, secureDialOpts)
 	g.emitter = newBatchingEmitter(gConf.PropagateIterations, gConf.MaxPropagationBurstSize,
 		gConf.MaxPropagationBurstLatency, g.sendGossipBatch)
@@ -59,6 +63,7 @@ func NewGossipService(gConf *config.GossipConfig, idConf *config.IdentityConfig,
 
 type gossipService struct {
 	selfIdentity          common.PeerIdentityType
+	selfPKIid             common.PKIidType
 	includeIdentityPeriod time.Time
 	idMapper              identity.Identity
 	srv                   *rpc.Server
@@ -70,6 +75,8 @@ type gossipService struct {
 	toDieChan             chan struct{}
 	presumedDead          chan common.PKIidType
 	discAdapter           *discoveryAdapter
+	chanState             *channelState
+	chainStateMsgStore    lib.MessageStore
 }
 
 func (g *gossipService) Gossip(msg *protos.RKSyncMessage) {
@@ -100,17 +107,12 @@ func (g *gossipService) Gossip(msg *protos.RKSyncMessage) {
 	})
 }
 
-func (g *gossipService) Peers() []common.NetworkMember {
-	return g.disc.GetMembership()
+func (g *gossipService) JoinChan(chainID string, leader bool) {
+
 }
 
-func (g *gossipService) Accept(acceptor common.MessageAcceptor, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage) {
-	if passThrough {
-		return nil, g.srv.Accept(acceptor)
-	}
-
-	// todo: not finished
-	return nil, nil
+func (g *gossipService) Peers() []common.NetworkMember {
+	return g.disc.GetMembership()
 }
 
 func (g *gossipService) Stop() {
@@ -208,6 +210,31 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 		return
 	}
 
+	if msg.IsChannelRestricted() {
+		if g.chainStateMsgStore.Add(msg) {
+			gc := g.chanState.lookupChannelForMsg(m)
+			if gc == nil {
+				if !msg.IsChainStateMsg() && !g.toDie() {
+					logging.Debug("No such channel", msg.Channel, "discarding message", msg)
+					return
+				}
+
+				if !g.isInChannel(m) {
+					g.emitter.Add(&emittedRKSyncMessage{
+						SignedRKSyncMessage: msg,
+						filter:              m.GetConnectionInfo().ID.IsNotSameFilter,
+					})
+				} else {
+					gc = g.chanState.createChannel(string(msg.Channel), false)
+				}
+			}
+			if gc != nil {
+				gc.HandleMessage(m)
+			}
+		}
+		return
+	}
+
 	if selectOnlyDiscoveryMessages(m) {
 		if m.GetRKSyncMessage().GetMemReq() != nil {
 			sMsg, err := m.GetRKSyncMessage().GetMemReq().SelfInformation.ToRKSyncMessage()
@@ -226,6 +253,23 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 		}
 		g.forwardDiscoveryMsg(m)
 	}
+}
+
+func (g *gossipService) isInChannel(m protos.ReceivedMessage) bool {
+	msg := m.GetRKSyncMessage()
+	chainStateInfo, err := msg.GetState().GetChainStateInfo()
+	if err != nil {
+		logging.Errorf("Failed unmarshalling ChainStateInfo message: %v", err)
+		return false
+	}
+
+	for _, member := range chainStateInfo.Properties.Members {
+		if bytes.Equal(member.PkiId, g.selfPKIid) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (g *gossipService) forwardDiscoveryMsg(msg protos.ReceivedMessage) {
@@ -289,6 +333,16 @@ func (g *gossipService) connect2BootstrapPeers() {
 
 func (g *gossipService) toDie() bool {
 	return atomic.LoadInt32(&g.stopFlag) == int32(1)
+}
+
+func (g *gossipService) newChainStateMsgStore() lib.MessageStore {
+	pol := protos.NewRKSyncMessageComparator()
+	return lib.NewMessageStoreExpirable(pol,
+		lib.Noop,
+		g.conf.PublishStateInfoInterval*100,
+		nil,
+		nil,
+		lib.Noop)
 }
 
 func selectOnlyDiscoveryMessages(m interface{}) bool {

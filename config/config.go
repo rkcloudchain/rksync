@@ -31,6 +31,8 @@ type GossipConfig struct {
 	PullInterval               time.Duration // Determines frequency of pull phases
 	PullPeerNum                int           // Number of peers to pull from
 	PublishCertPeriod          time.Duration // Time from startup certifiates are included in Alive messages
+	PublishStateInfoInterval   time.Duration // Determines frequency of pushing state info messages to peers
+	RequestStateInfoInterval   time.Duration // Determines frequency of pulling state info message from peers
 }
 
 // IdentityConfig defines the identity parameters for peer
@@ -48,4 +50,14 @@ type TLSConfig struct {
 	ClientRootCAs     []string
 	UseTLS            bool
 	RequireClientCert bool
+}
+
+// ChannelConfig is a configuration item of the channel
+type ChannelConfig struct {
+	ID                          string
+	PublishStateInfoInterval    time.Duration
+	PullPeerNum                 int
+	PullInterval                time.Duration
+	RequestStateInfoInterval    time.Duration
+	StateInfoCacheSweepInterval time.Duration
 }

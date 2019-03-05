@@ -66,3 +66,9 @@ const (
 	// MessageInvalidated means message is invalidated by the other message
 	MessageInvalidated
 )
+
+// FileSyncInfo defines a file sync mode
+type FileSyncInfo struct {
+	Path string
+	Mode string
+}
