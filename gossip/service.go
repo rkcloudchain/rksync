@@ -264,7 +264,7 @@ func (g *gossipService) isInChannel(m protos.ReceivedMessage) bool {
 	}
 
 	for _, member := range chainStateInfo.Properties.Members {
-		if bytes.Equal(member.PkiId, g.selfPKIid) {
+		if bytes.Equal(member, g.selfPKIid) {
 			return true
 		}
 	}
