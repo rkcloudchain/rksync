@@ -89,10 +89,14 @@ func (cs *channelState) createChannel(chainID string, leader bool) channel.Chann
 	}
 	cs.Lock()
 	defer cs.Unlock()
-	pkiID := cs.g.selfPKIid
-	ga := &gossipAdapterImpl{gossipService: cs.g, Discovery: cs.g.disc}
-	gc := channel.NewGossipChannel(pkiID, chainID, leader, ga, cs.g.idMapper)
-	cs.channels[chainID] = gc
+
+	gc, exists := cs.channels[chainID]
+	if !exists {
+		pkiID := cs.g.selfPKIid
+		ga := &gossipAdapterImpl{gossipService: cs.g, Discovery: cs.g.disc}
+		gc = channel.NewGossipChannel(pkiID, chainID, leader, ga, cs.g.idMapper)
+		cs.channels[chainID] = gc
+	}
 	return gc
 }
 
