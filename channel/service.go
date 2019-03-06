@@ -23,10 +23,9 @@ type gossipChannel struct {
 	chainStateMsg             *protos.ChainState
 	idMapper                  identity.Identity
 	chainID                   string
-	members                   []common.PKIidType
+	members                   map[string]common.PKIidType
 	stateInfoPublishScheduler *time.Ticker
 	stateInfoRequestScheduler *time.Ticker
-	incTime                   uint64
 	stopChan                  chan struct{}
 }
 
@@ -34,7 +33,6 @@ type gossipChannel struct {
 func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapter Adapter, idMapper identity.Identity) Channel {
 
 	gc := &gossipChannel{
-		incTime:                   uint64(time.Now().UnixNano()),
 		pkiID:                     pkiID,
 		Adapter:                   adapter,
 		leader:                    leader,
@@ -44,7 +42,7 @@ func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapt
 		stopChan:                  make(chan struct{}),
 		stateInfoPublishScheduler: time.NewTicker(adapter.GetChannelConfig().PublishStateInfoInterval),
 		stateInfoRequestScheduler: time.NewTicker(adapter.GetChannelConfig().RequestStateInfoInterval),
-		members:                   []common.PKIidType{},
+		members:                   make(map[string]common.PKIidType),
 	}
 
 	go gc.periodicalInvocation(gc.publishStateInfo, gc.stateInfoPublishScheduler.C)
@@ -55,12 +53,128 @@ func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapt
 	return gc
 }
 
-func (gc *gossipChannel) UpdateMembers(members []common.PKIidType) {
+func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.FileSyncInfo) (*protos.ChainState, error) {
+	gc.Lock()
+	defer gc.Unlock()
 
+	stateInfo := &protos.ChainStateInfo{
+		Leader: gc.pkiID,
+		Properties: &protos.Properties{
+			Members: make([][]byte, len(members)),
+			Files:   make([]*protos.File, len(files)),
+		},
+	}
+
+	for i, member := range members {
+		gc.members[string(member)] = member
+		stateInfo.Properties.Members[i] = []byte(member)
+	}
+	for i, file := range files {
+		mode, ok := protos.File_Mode_value[file.Mode]
+		if !ok {
+			return nil, errors.Errorf("Unknown file mode %s", file.Mode)
+		}
+
+		stateInfo.Properties.Files[i] = &protos.File{
+			Path: file.Path,
+			Mode: protos.File_Mode(mode),
+		}
+	}
+
+	stateInfoMsg := &protos.SignedRKSyncMessage{
+		RKSyncMessage: &protos.RKSyncMessage{
+			Tag:     protos.RKSyncMessage_CHAN_ONLY,
+			Channel: []byte(gc.chainID),
+			Nonce:   0,
+			Content: &protos.RKSyncMessage_StateInfo{
+				StateInfo: stateInfo,
+			},
+		},
+	}
+
+	envp, err := stateInfoMsg.Sign(func(msg []byte) ([]byte, error) {
+		return gc.idMapper.Sign(msg)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	chainState := &protos.ChainState{
+		SeqNum:   uint64(time.Now().UnixNano()),
+		ChainMac: GenerateMAC(gc.pkiID, gc.chainID),
+		Envelope: envp,
+	}
+
+	gc.chainStateMsg = chainState
+	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(1))
+	return chainState, nil
 }
 
-func (gc *gossipChannel) UpdateFiles(files []*common.FileSyncInfo) {
+func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState, error) {
+	gc.Lock()
+	defer gc.Unlock()
 
+	msg, err := gc.chainStateMsg.Envelope.ToRKSyncMessage()
+	if err != nil {
+		return nil, err
+	}
+
+	if !msg.IsStateInfoMsg() {
+		return nil, errors.New("Channel state message isn't well formatted")
+	}
+
+	stateInfo := msg.GetStateInfo()
+	if !bytes.Equal(gc.pkiID, stateInfo.Leader) {
+		return nil, errors.New("Only the channel leader can modify the channel state")
+	}
+
+	stateInfo.Properties.Members = append(stateInfo.Properties.Members, member)
+	envp, err := msg.Sign(func(msg []byte) ([]byte, error) {
+		return gc.idMapper.Sign(msg)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	gc.chainStateMsg.Envelope = envp
+	gc.members[string(member)] = member
+	return gc.chainStateMsg, nil
+}
+
+func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, error) {
+	gc.Lock()
+	defer gc.Unlock()
+
+	msg, err := gc.chainStateMsg.Envelope.ToRKSyncMessage()
+	if err != nil {
+		return nil, err
+	}
+
+	if !msg.IsStateInfoMsg() {
+		return nil, errors.New("Channel state message isn't well formatted")
+	}
+
+	stateInfo := msg.GetStateInfo()
+	if !bytes.Equal(gc.pkiID, stateInfo.Leader) {
+		return nil, errors.New("Only the channel leader can modify the channel state")
+	}
+
+	mode, exists := protos.File_Mode_value[file.Mode]
+	if !exists {
+		return nil, errors.Errorf("Unknow file mode: %s", file.Mode)
+	}
+	f := &protos.File{Path: file.Path, Mode: protos.File_Mode(mode)}
+	stateInfo.Properties.Files = append(stateInfo.Properties.Files, f)
+
+	envp, err := msg.Sign(func(msg []byte) ([]byte, error) {
+		return gc.idMapper.Sign(msg)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	gc.chainStateMsg.Envelope = envp
+	return gc.chainStateMsg, nil
 }
 
 func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
@@ -179,10 +293,23 @@ func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.
 	gc.Lock()
 	defer gc.Unlock()
 
+	if gc.chainStateMsg != nil {
+		oldMsg, err := gc.chainStateMsg.Envelope.ToRKSyncMessage()
+		if err != nil {
+			logging.Errorf("Failed unmarshalling channel state message: %s", err)
+			return err
+		}
+
+		if !bytes.Equal(oldMsg.GetStateInfo().Leader, csi.Leader) {
+			logging.Warningf("Channel %s: Leader has been changed, original %s, now is %s", gc.chainID, oldMsg.GetStateInfo().Leader, csi.Leader)
+			return errors.New("Channel's leader has been changed")
+		}
+	}
+
 	gc.chainStateMsg = msg
-	gc.members = make([]common.PKIidType, len(csi.Properties.Members))
-	for index, member := range csi.Properties.Members {
-		gc.members[index] = common.PKIidType(member)
+	gc.members = make(map[string]common.PKIidType)
+	for _, member := range csi.Properties.Members {
+		gc.members[string(member)] = member
 	}
 
 	return nil

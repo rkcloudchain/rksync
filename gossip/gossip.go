@@ -1,6 +1,8 @@
 package gossip
 
 import (
+	"crypto/x509"
+
 	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/filter"
@@ -17,8 +19,20 @@ type Gossip interface {
 	// Peers returns the NetworkMembers considered alive
 	Peers() []common.NetworkMember
 
-	// JoinChan makes the Gossip instance join a channel
-	JoinChan(chainID string, leader bool)
+	// AddMemberToChan adds memeber to channel
+	AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error)
+
+	// AddFileToChan adds file to channel
+	AddFileToChan(chainID string, file common.FileSyncInfo) (*protos.ChainState, error)
+
+	// GetPKIidOfCert returns the PKI-ID of a certificate
+	GetPKIidOfCert(nodeID string, cert *x509.Certificate) (common.PKIidType, error)
+
+	// CreateChannel creates a channel
+	CreateChannel(chainID string, files []common.FileSyncInfo) (*protos.ChainState, error)
+
+	// CloseChannel closes a channel
+	CloseChannel(chainID string)
 
 	// Stop the gossip component
 	Stop()

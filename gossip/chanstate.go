@@ -82,7 +82,21 @@ func (cs *channelState) getChannelByChainID(chainID string) channel.Channel {
 	return cs.channels[chainID]
 }
 
-func (cs *channelState) createChannel(chainID string, leader bool) channel.Channel {
+func (cs *channelState) removeChannel(chainID string) {
+	if cs.isStopping() {
+		return
+	}
+	cs.Lock()
+	defer cs.Unlock()
+
+	gc, exists := cs.channels[chainID]
+	if exists {
+		gc.Stop()
+		delete(cs.channels, chainID)
+	}
+}
+
+func (cs *channelState) joinChannel(chainID string, leader bool) channel.Channel {
 	if cs.isStopping() {
 		return nil
 	}

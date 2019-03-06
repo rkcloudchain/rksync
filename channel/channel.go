@@ -26,11 +26,14 @@ type Channel interface {
 	// HandleMessage processes a message sent by a remote peer
 	HandleMessage(protos.ReceivedMessage)
 
-	// UpdateMembers updates the member of the channel
-	UpdateMembers([]common.PKIidType)
+	// Initialize allocates the ChainState and should be invoked once per channel per creation
+	Initialize([]common.PKIidType, []common.FileSyncInfo) (*protos.ChainState, error)
 
-	// UpdateFiles updates the file of the channel
-	UpdateFiles([]*common.FileSyncInfo)
+	// AddMember adds member to the channel
+	AddMember(common.PKIidType) (*protos.ChainState, error)
+
+	// AddFile adds file to the channel
+	AddFile(common.FileSyncInfo) (*protos.ChainState, error)
 
 	// Stop the channel's activity
 	Stop()

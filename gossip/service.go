@@ -2,6 +2,8 @@ package gossip
 
 import (
 	"bytes"
+	"crypto/x509"
+	"encoding/pem"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"github.com/rkcloudchain/rksync/logging"
 	"github.com/rkcloudchain/rksync/protos"
 	"github.com/rkcloudchain/rksync/rpc"
+	"github.com/rkcloudchain/rksync/util"
 	"google.golang.org/grpc"
 )
 
@@ -107,8 +110,55 @@ func (g *gossipService) Gossip(msg *protos.RKSyncMessage) {
 	})
 }
 
-func (g *gossipService) JoinChan(chainID string, leader bool) {
+func (g *gossipService) AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error) {
+	gc := g.chanState.getChannelByChainID(chainID)
+	if gc == nil {
+		return nil, errors.Errorf("Channel %s not yet created", chainID)
+	}
 
+	return gc.AddMember(member)
+}
+
+func (g *gossipService) AddFileToChan(chainID string, file common.FileSyncInfo) (*protos.ChainState, error) {
+	gc := g.chanState.getChannelByChainID(chainID)
+	if gc == nil {
+		return nil, errors.Errorf("Channel %s not yet created", chainID)
+	}
+
+	return gc.AddFile(file)
+}
+
+func (g *gossipService) GetPKIidOfCert(nodeID string, cert *x509.Certificate) (common.PKIidType, error) {
+	nodeIDRaw := []byte(nodeID)
+	pb := &pem.Block{Bytes: cert.Raw, Type: "CERTIFICATE"}
+	pemBytes := pem.EncodeToMemory(pb)
+	if pemBytes == nil {
+		return nil, errors.New("Encoding of certificate failed")
+	}
+
+	raw := append(nodeIDRaw, pemBytes...)
+	digest := util.ComputeSHA256(raw)
+	return digest, nil
+}
+
+func (g *gossipService) CreateChannel(chainID string, files []common.FileSyncInfo) (*protos.ChainState, error) {
+	if chainID == "" {
+		return nil, errors.New("Channel ID must be provided")
+	}
+	if g.toDie() {
+		return nil, errors.New("RKSync service is stopping")
+	}
+
+	gc := g.chanState.joinChannel(chainID, true)
+	return gc.Initialize([]common.PKIidType{g.selfPKIid}, files)
+}
+
+func (g *gossipService) CloseChannel(chainID string) {
+	if chainID == "" {
+		return
+	}
+
+	g.chanState.removeChannel(chainID)
 }
 
 func (g *gossipService) Peers() []common.NetworkMember {
@@ -225,7 +275,7 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 						filter:              m.GetConnectionInfo().ID.IsNotSameFilter,
 					})
 				} else {
-					gc = g.chanState.createChannel(string(msg.Channel), false)
+					gc = g.chanState.joinChannel(string(msg.Channel), false)
 				}
 			}
 			if gc != nil {

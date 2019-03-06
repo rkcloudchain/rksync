@@ -244,9 +244,15 @@ func (m *RKSyncMessage) IsChannelRestricted() bool {
 
 // GetChainStateInfo ...
 func (m *ChainState) GetChainStateInfo() (*ChainStateInfo, error) {
-	csi := &ChainStateInfo{}
-	err := proto.Unmarshal(m.Envelope.Payload, csi)
-	return csi, err
+	msg, err := m.Envelope.ToRKSyncMessage()
+	if err != nil {
+		return nil, err
+	}
+	if !msg.RKSyncMessage.IsStateInfoMsg() {
+		return nil, errors.New("Failed to unmarshal ChainStateInfo message")
+	}
+
+	return msg.GetStateInfo(), nil
 }
 
 // Sign signs a ChainStateInfo with given Signer.

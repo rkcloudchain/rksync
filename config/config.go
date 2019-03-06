@@ -30,15 +30,17 @@ var (
 	}
 	// default connection timeout
 	DefaultConnectionTimeout = 5 * time.Second
+	DefaultFileSystemPath    = "/var/rksync/production"
 )
 
 // Config defines the parameters for rksync
 type Config struct {
-	BindAddress string // Address we bind to
-	BindPort    int    // Port we bind to
-	Gossip      *GossipConfig
-	Identity    *IdentityConfig
-	Server      *ServerConfig
+	BindAddress    string // Address we bind to
+	BindPort       int    // Port we bind to
+	FileSystemPath string // Path on the file system where rksync will store data.
+	Gossip         *GossipConfig
+	Identity       *IdentityConfig
+	Server         *ServerConfig
 }
 
 // GossipConfig is the configuration of the rksync component
