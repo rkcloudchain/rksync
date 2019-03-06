@@ -7,7 +7,6 @@ import (
 
 	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
-	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/discovery"
 	"github.com/rkcloudchain/rksync/protos"
 )
@@ -105,8 +104,8 @@ type gossipAdapterImpl struct {
 	discovery.Discovery
 }
 
-func (ga *gossipAdapterImpl) GetChannelConfig() config.ChannelConfig {
-	return config.ChannelConfig{
+func (ga *gossipAdapterImpl) GetChannelConfig() channel.Config {
+	return channel.Config{
 		ID:                          ga.conf.ID,
 		PublishStateInfoInterval:    ga.conf.PublishStateInfoInterval,
 		PullPeerNum:                 ga.conf.PullPeerNum,

@@ -32,9 +32,17 @@ var (
 	DefaultConnectionTimeout = 5 * time.Second
 )
 
+// Config defines the parameters for rksync
+type Config struct {
+	BindAddress string // Address we bind to
+	BindPort    int    // Port we bind to
+	Gossip      *GossipConfig
+	Identity    *IdentityConfig
+	Server      *ServerConfig
+}
+
 // GossipConfig is the configuration of the rksync component
 type GossipConfig struct {
-	BindPort                   int           // Port we bind to
 	ID                         string        // ID of this instance
 	BootstrapPeers             []string      // Peers we connect to at startup
 	PropagateIterations        int           // Number of times a message is pushed to remote peer
@@ -94,16 +102,6 @@ type TLSConfig struct {
 	CipherSuites      []uint16
 }
 
-// ChannelConfig is a configuration item of the channel
-type ChannelConfig struct {
-	ID                          string
-	PublishStateInfoInterval    time.Duration
-	PullPeerNum                 int
-	PullInterval                time.Duration
-	RequestStateInfoInterval    time.Duration
-	StateInfoCacheSweepInterval time.Duration
-}
-
 // ServerKeepaliveOptions returns gRPC keepalive options for server.
 func ServerKeepaliveOptions(ka *KeepaliveConfig) []grpc.ServerOption {
 	if ka == nil {
@@ -121,4 +119,20 @@ func ServerKeepaliveOptions(ka *KeepaliveConfig) []grpc.ServerOption {
 	}
 	serverOpts = append(serverOpts, grpc.KeepaliveEnforcementPolicy(kep))
 	return serverOpts
+}
+
+// ClientKeepaliveOptions returns gRPC keepalive options for clients.
+func ClientKeepaliveOptions(ka *KeepaliveConfig) []grpc.DialOption {
+	if ka == nil {
+		ka = DefaultKeepaliveConfig
+	}
+
+	var dialOpts []grpc.DialOption
+	kap := keepalive.ClientParameters{
+		Time:                ka.ClientInterval,
+		Timeout:             ka.ClientTimeout,
+		PermitWithoutStream: true,
+	}
+	dialOpts = append(dialOpts, grpc.WithKeepaliveParams(kap))
+	return dialOpts
 }
