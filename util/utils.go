@@ -26,6 +26,29 @@ func ComputeSHA256(data []byte) (hash []byte) {
 	return h.Sum(nil)
 }
 
+// PEMToX509Certs parse PEM-encoded certs
+func PEMToX509Certs(pemCert []byte) ([]*x509.Certificate, []string, error) {
+	certs := []*x509.Certificate{}
+	subjects := []string{}
+	for len(pemCert) > 0 {
+		var block *pem.Block
+		block, pemCert = pem.Decode(pemCert)
+		if block == nil {
+			break
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, subjects, err
+		}
+
+		certs = append(certs, cert)
+		subjects = append(subjects, string(cert.RawSubject))
+	}
+
+	return certs, subjects, nil
+}
+
 // GetX509CertificateFromPEM get on x509 certificate from bytes in PEM format
 func GetX509CertificateFromPEM(cert []byte) (*x509.Certificate, error) {
 	block, _ := pem.Decode(cert)
