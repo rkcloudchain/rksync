@@ -22,7 +22,7 @@ var selfIdentity common.PeerIdentityType
 func TestMain(m *testing.M) {
 	certfile := util.GetIdentityPath("signcert.pem")
 	keyfile := util.GetIdentityPath("signkey")
-	cafile := util.GetIdentityPath("ca.pem")
+	cafile := util.GetIdentityPath("ca.org1.pem")
 
 	cfg := &config.IdentityConfig{
 		Certificate: certfile,
