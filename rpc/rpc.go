@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/identity"
@@ -100,7 +100,7 @@ func (s *Server) createConnection(endpoint string, expectedPKIID common.PKIidTyp
 	cl := protos.NewRKSyncClient(cc)
 	ctx, cancel = context.WithTimeout(context.Background(), defConnTimeout)
 	defer cancel()
-	if _, err = cl.Ping(ctx, &empty.Empty{}); err != nil {
+	if _, err = cl.Ping(ctx, &types.Empty{}); err != nil {
 		cc.Close()
 		return nil, errors.WithStack(err)
 	}
@@ -287,7 +287,7 @@ func (s *Server) Handshake(peer *common.NetworkMember) (common.PeerIdentityType,
 	cl := protos.NewRKSyncClient(cc)
 	ctx, cancel = context.WithTimeout(context.Background(), defConnTimeout)
 	defer cancel()
-	if _, err = cl.Ping(ctx, &empty.Empty{}); err != nil {
+	if _, err = cl.Ping(ctx, &types.Empty{}); err != nil {
 		return nil, err
 	}
 
@@ -338,7 +338,7 @@ func (s *Server) Probe(remotePeer *common.NetworkMember) error {
 	ctx, cancel = context.WithTimeout(context.Background(), defConnTimeout)
 	defer cancel()
 
-	_, err = cl.Ping(ctx, &empty.Empty{})
+	_, err = cl.Ping(ctx, &types.Empty{})
 	logging.Debugf("Returning %v", err)
 	return err
 }
@@ -414,8 +414,8 @@ func (s *Server) SyncStream(stream protos.RKSync_SyncStreamServer) error {
 }
 
 // Ping is used to probe a remote peer's aliveness
-func (s *Server) Ping(context.Context, *empty.Empty) (*empty.Empty, error) {
-	return &empty.Empty{}, nil
+func (s *Server) Ping(context.Context, *types.Empty) (*types.Empty, error) {
+	return &types.Empty{}, nil
 }
 
 func (s *Server) disconnect(pkiID common.PKIidType) {

@@ -1,8 +1,14 @@
 syntax = "proto3";
-
-option go_package = "github.com/rkcloudchain/rksync/protos" ;
-
 package protos;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/rkcloudchain/rksync/protos";
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+option (gogoproto.goproto_enum_prefix_all) = true;
 
 message SerializedIdentity {
     string node_id = 1;
