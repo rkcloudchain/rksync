@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sync"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -29,8 +30,11 @@ type Identity interface {
 	GetPKIidOfCert(common.PeerIdentityType) common.PKIidType
 }
 
+type purgeTrigger func(pkiID common.PKIidType)
+
 type identityMapper struct {
-	certs     map[string]*x509.Certificate
+	onPurge   purgeTrigger
+	certs     map[string]*storedIdentity
 	opts      *x509.VerifyOptions
 	rootCerts []*x509.Certificate
 	privKey   interface{}
@@ -38,14 +42,14 @@ type identityMapper struct {
 }
 
 // NewIdentity returns a new Identity instance
-func NewIdentity(cfg *config.IdentityConfig, selfIdentity common.PeerIdentityType) (Identity, error) {
+func NewIdentity(cfg *config.IdentityConfig, selfIdentity common.PeerIdentityType, onPurge purgeTrigger) (Identity, error) {
 	if cfg == nil {
 		return nil, errors.New("NewIdentity error: nil cfg reference")
 	}
 
 	logging.Debug("Creating Identity instance")
 	identity := &identityMapper{
-		certs: make(map[string]*x509.Certificate),
+		certs: make(map[string]*storedIdentity),
 	}
 
 	selfPKIID := identity.GetPKIidOfCert(selfIdentity)
@@ -99,7 +103,20 @@ func (is *identityMapper) Put(pkiID common.PKIidType, identity common.PeerIdenti
 		return nil
 	}
 
-	is.certs[string(pkiID)] = cert
+	var expirationTimer *time.Timer
+	expirationDate := cert.NotAfter
+	if !expirationDate.IsZero() {
+		if time.Now().After(expirationDate) {
+			return errors.New("Identity expired")
+		}
+
+		timeToLive := expirationDate.Add(time.Millisecond).Sub(time.Now())
+		expirationTimer = time.AfterFunc(timeToLive, func() {
+			is.delete(pkiID)
+		})
+	}
+
+	is.certs[string(pkiID)] = newStoredIdentity(pkiID, cert, expirationTimer)
 	return nil
 }
 
@@ -107,11 +124,11 @@ func (is *identityMapper) Get(pkiID common.PKIidType) (*x509.Certificate, error)
 	is.RLock()
 	defer is.RUnlock()
 
-	cert, exists := is.certs[string(pkiID)]
+	id, exists := is.certs[string(pkiID)]
 	if !exists {
 		return nil, errors.New("PKIID wasn't found")
 	}
-	return cert, nil
+	return id.identity, nil
 }
 
 func (is *identityMapper) Sign(msg []byte) ([]byte, error) {
@@ -292,6 +309,13 @@ func (is *identityMapper) setupCSP(conf *config.IdentityConfig) error {
 	return nil
 }
 
+func (is *identityMapper) delete(pkiID common.PKIidType) {
+	is.Lock()
+	defer is.Unlock()
+	is.onPurge(pkiID)
+	delete(is.certs, string(pkiID))
+}
+
 // sanitizeCert ensures that x509 certificates signed using ECDSA
 // do have signatures in Low-S. If this is not the case, the certificate
 // is regenerated to have a Low-S signature.
@@ -332,3 +356,18 @@ func (is *identityMapper) getUniqueValidationChain(cert *x509.Certificate) ([]*x
 
 	return validationChains[0], nil
 }
+
+type storedIdentity struct{
+	pkiID           common.PKIidType
+	identity        *x509.Certificate
+	expirationTimer *time.Timer
+}
+
+func newStoredIdentity(pkiID common.PKIidType, identity *x509.Certificate, expirationTimer *time.Timer) *storedIdentity {
+	return &storedIdentity{
+		pkiID:           pkiID,
+		identity:        identity,
+		expirationTimer: expirationTimer,
+	}
+}
+

@@ -43,7 +43,9 @@ func NewGossipService(gConf *config.GossipConfig, idConf *config.IdentityConfig,
 	g.chainStateMsgStore = g.newChainStateMsgStore()
 
 	var err error
-	g.idMapper, err = identity.NewIdentity(idConf, selfIdentity)
+	g.idMapper, err = identity.NewIdentity(idConf, selfIdentity, func(pkiID common.PKIidType) {
+		g.srv.CloseConn(&common.NetworkMember{PKIID: pkiID})
+	})
 	if err != nil {
 		return nil, err
 	}
