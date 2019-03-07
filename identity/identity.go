@@ -59,7 +59,7 @@ func NewIdentity(cfg *config.IdentityConfig, selfIdentity common.PeerIdentityTyp
 	}
 
 	if err := identity.Put(selfPKIID, selfIdentity); err != nil {
-		panic(errors.Wrap(err, "Failed putting out own identity into the identity mapper"))
+		return nil, errors.Wrap(err, "Failed putting out own identity into the identity mapper")
 	}
 	return identity, nil
 }
