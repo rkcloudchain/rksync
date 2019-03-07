@@ -13,12 +13,6 @@ type channelRoutingFilterFactory func(channel.Channel) filter.RoutingFilter
 
 // Gossip is the interface of the gossip component
 type Gossip interface {
-	// Gossip sends a message to other peers to the network
-	Gossip(msg *protos.RKSyncMessage)
-
-	// Peers returns the NetworkMembers considered alive
-	Peers() []common.NetworkMember
-
 	// AddMemberToChan adds memeber to channel
 	AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error)
 

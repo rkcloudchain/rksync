@@ -13,6 +13,7 @@ import (
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/discovery"
+	"github.com/rkcloudchain/rksync/filter"
 	"github.com/rkcloudchain/rksync/identity"
 	"github.com/rkcloudchain/rksync/lib"
 	"github.com/rkcloudchain/rksync/logging"
@@ -82,34 +83,6 @@ type gossipService struct {
 	chainStateMsgStore    lib.MessageStore
 }
 
-func (g *gossipService) Gossip(msg *protos.RKSyncMessage) {
-	// TODO: msg tag legal
-
-	signMsg := &protos.SignedRKSyncMessage{
-		RKSyncMessage: msg,
-	}
-
-	signer := func(msg []byte) ([]byte, error) {
-		return g.idMapper.Sign(msg)
-	}
-
-	_, err := signMsg.Sign(signer)
-	if err != nil {
-		logging.Warningf("Failed signing message: %v", err)
-		return
-	}
-
-	if g.conf.PropagateIterations == 0 {
-		return
-	}
-	g.emitter.Add(&emittedRKSyncMessage{
-		SignedRKSyncMessage: signMsg,
-		filter: func(_ common.PKIidType) bool {
-			return true
-		},
-	})
-}
-
 func (g *gossipService) AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error) {
 	gc := g.chanState.getChannelByChainID(chainID)
 	if gc == nil {
@@ -161,10 +134,6 @@ func (g *gossipService) CloseChannel(chainID string) {
 	g.chanState.removeChannel(chainID)
 }
 
-func (g *gossipService) Peers() []common.NetworkMember {
-	return g.disc.GetMembership()
-}
-
 func (g *gossipService) Stop() {
 	if g.toDie() {
 		return
@@ -201,7 +170,38 @@ func (g *gossipService) gossipBatch(msgs []*emittedRKSyncMessage) {
 		return
 	}
 
-	// todo: send to peers
+	var chainStateMsgs []*emittedRKSyncMessage
+
+	isAChainStateMsg := func(o interface{}) bool {
+		return o.(*emittedRKSyncMessage).IsChainStateMsg()
+	}
+
+	chainStateMsgs, msgs = partitionMessages(isAChainStateMsg, msgs)
+	for _, chainStateMsg := range chainStateMsgs {
+		peerSelector := func(member common.NetworkMember) bool {
+			return chainStateMsg.filter(member.PKIID)
+		}
+		gc := g.chanState.getChannelByChainID(string(chainStateMsg.Channel))
+		if gc != nil {
+			peerSelector = filter.CombineRoutingFilters(peerSelector, gc.IsMemberInChan)
+		}
+
+		peers2Send := filter.SelectPeers(g.conf.PropagatePeerNum, g.disc.GetMembership(), peerSelector)
+		g.srv.Send(chainStateMsg.SignedRKSyncMessage, peers2Send...)
+	}
+
+	for _, msg := range msgs {
+		if !msg.IsAliveMsg() {
+			logging.Error("Unknow message type", msg)
+			continue
+		}
+
+		selector := filter.CombineRoutingFilters(filter.SelectAllPolicy, func(member common.NetworkMember) bool {
+			return msg.filter(member.PKIID)
+		})
+		peers2Send := filter.SelectPeers(g.conf.PropagatePeerNum, g.disc.GetMembership(), selector)
+		g.srv.Send(msg.SignedRKSyncMessage, peers2Send...)
+	}
 }
 
 func (g *gossipService) start() {
@@ -610,4 +610,20 @@ func (sa *discoverySecurityAdapter) validateAliveMsgSignature(m *protos.SignedRK
 		return false
 	}
 	return true
+}
+
+// partitionMessages receives a predicate and a slice of rksync messages
+// and returns a tuple of two slices: the messages that hold for the predicate
+// and the rest
+func partitionMessages(pred common.MessageAcceptor, a []*emittedRKSyncMessage) ([]*emittedRKSyncMessage, []*emittedRKSyncMessage) {
+	s1 := []*emittedRKSyncMessage{}
+	s2 := []*emittedRKSyncMessage{}
+	for _, m := range a {
+		if pred(m) {
+			s1 = append(s1, m)
+		} else {
+			s2 = append(s2, m)
+		}
+	}
+	return s1, s2
 }

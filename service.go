@@ -31,7 +31,7 @@ var (
 )
 
 // InitRKSyncService initialize rksync service
-func InitRKSyncService(cfg *config.Config) error {
+func InitRKSyncService(cfg config.Config) error {
 	if cfg.FileSystemPath == "" {
 		cfg.FileSystemPath = config.DefaultFileSystemPath
 	}
@@ -48,27 +48,31 @@ func InitRKSyncService(cfg *config.Config) error {
 	}
 	fileSystemPath = cfg.FileSystemPath
 
-	listenAddr := getListenAddress(cfg)
-	grpcServer, err := server.NewGRPCServer(listenAddr, *cfg.Server)
+	listenAddr := getListenAddress(&cfg)
+	grpcServer, err := server.NewGRPCServer(listenAddr, cfg.Server)
 	if err != nil {
 		logging.Errorf("Failed to create grpc server (%s)", err)
 		return err
 	}
 
 	if cfg.Server.SecOpts.UseTLS {
-		clientCreds, err = clientTransportCredentials(cfg)
+		clientCreds, err = clientTransportCredentials(&cfg)
 		if err != nil {
 			return errors.Errorf("Failed to set TLS client certificate (%s)", err)
 		}
 	}
 
-	serializedIdentity, err := serializeIdentity(cfg)
+	serializedIdentity, err := serializeIdentity(&cfg)
 	if err != nil {
 		return errors.Errorf("Failed serializing self identity: %v", err)
 	}
 
+	err = validateGossipConfig(&cfg)
+	if err != nil {
+		return err
+	}
 	rkSyncSvc, err = gossip.NewGossipService(cfg.Gossip, cfg.Identity, grpcServer.Server(), serializedIdentity, func() []grpc.DialOption {
-		return secureDialOpts(cfg)
+		return secureDialOpts(&cfg)
 	})
 	if err != nil {
 		return errors.Errorf("Failed creating RKSync service (%s)", err)

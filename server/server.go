@@ -24,7 +24,7 @@ type GRPCServer struct {
 
 // NewGRPCServer creates a new implementation of a GRPCServer given a
 // listen address
-func NewGRPCServer(address string, serverConfig config.ServerConfig) (*GRPCServer, error) {
+func NewGRPCServer(address string, serverConfig *config.ServerConfig) (*GRPCServer, error) {
 	if address == "" {
 		return nil, errors.New("Missing address parameter")
 	}
@@ -39,7 +39,7 @@ func NewGRPCServer(address string, serverConfig config.ServerConfig) (*GRPCServe
 
 // NewGRPCServerFromListener creates a new instance of GRPCServer given
 // on existing net.Listener
-func NewGRPCServerFromListener(listener net.Listener, serverConfig config.ServerConfig) (*GRPCServer, error) {
+func NewGRPCServerFromListener(listener net.Listener, serverConfig *config.ServerConfig) (*GRPCServer, error) {
 	grpcServer := &GRPCServer{
 		address:  listener.Addr().String(),
 		listener: listener,
