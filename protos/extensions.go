@@ -173,7 +173,7 @@ func (m *SignedRKSyncMessage) Verify(peerIdentity []byte, verify Verifier) error
 		return errors.New("Empty signature")
 	}
 
-	payloadSigVerificationErr := verify(peerIdentity, m.Envelope.Payload, m.Envelope.Signature)
+	payloadSigVerificationErr := verify(peerIdentity, m.Envelope.Signature, m.Envelope.Payload)
 	if payloadSigVerificationErr != nil {
 		return payloadSigVerificationErr
 	}

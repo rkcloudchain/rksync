@@ -428,16 +428,16 @@ func (s *Server) disconnect(pkiID common.PKIidType) {
 
 func (s *Server) authenticateRemotePeer(stream stream) (*protos.ConnectionInfo, error) {
 	remoteAddress := extractRemoteAddress(stream)
+	logging.Debugf("Remote address: %s", remoteAddress)
 
 	var err error
 	var cMsg *protos.SignedRKSyncMessage
-	var selfCertHash []byte
 
 	signer := func(msg []byte) ([]byte, error) {
 		return s.idMapper.Sign(msg)
 	}
 
-	cMsg, err = s.createConnectionMsg(s.pkiID, selfCertHash, s.peerIdentity, signer)
+	cMsg, err = s.createConnectionMsg(s.pkiID, s.peerIdentity, signer)
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +489,7 @@ func (s *Server) authenticateRemotePeer(stream stream) (*protos.ConnectionInfo, 
 	return connInfo, nil
 }
 
-func (s *Server) createConnectionMsg(pkiID common.PKIidType, certHash []byte, cert common.PeerIdentityType, signer protos.Signer) (*protos.SignedRKSyncMessage, error) {
+func (s *Server) createConnectionMsg(pkiID common.PKIidType, cert common.PeerIdentityType, signer protos.Signer) (*protos.SignedRKSyncMessage, error) {
 	m := &protos.RKSyncMessage{
 		Tag: protos.RKSyncMessage_EMPTY,
 		Content: &protos.RKSyncMessage_Conn{
