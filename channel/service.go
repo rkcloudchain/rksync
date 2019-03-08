@@ -138,6 +138,7 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 
 	gc.chainStateMsg.Envelope = envp
 	gc.members[string(member)] = member
+	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(1))
 	return gc.chainStateMsg, nil
 }
 
@@ -174,6 +175,7 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 	}
 
 	gc.chainStateMsg.Envelope = envp
+	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(0))
 	return gc.chainStateMsg, nil
 }
 
