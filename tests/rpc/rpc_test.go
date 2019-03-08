@@ -7,6 +7,7 @@ import (
 
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/protos"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSendWithAck(t *testing.T) {
@@ -36,10 +37,22 @@ func TestSendWithAck(t *testing.T) {
 	}()
 
 	go func() {
-		for i := 0; i< msgNum; i++ {
+		for i := 0; i < msgNum; i++ {
 			<-inc2
 		}
 	}()
+}
+
+func TestGetConnectionInfo(t *testing.T) {
+	m1 := inst1.Accept(func(o interface{}) bool { return true })
+	inst2.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:9053", PKIID: []byte("localhost:9053")})
+	select {
+	case <-time.After(time.Second * 5):
+		t.Fatal("Didn't receive a message in time")
+	case msg := <-m1:
+		assert.Equal(t, inst2.GetPKIid(), msg.GetConnectionInfo().ID)
+		assert.NotNil(t, msg.GetSourceEnvelope())
+	}
 }
 
 func createRKSyncMessage() *protos.SignedRKSyncMessage {

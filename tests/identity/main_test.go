@@ -20,8 +20,8 @@ var idMapper identity.Identity
 var selfIdentity common.PeerIdentityType
 
 func TestMain(m *testing.M) {
-	certfile := util.GetIdentityPath("signcert.pem")
-	keyfile := util.GetIdentityPath("signkey")
+	certfile := util.GetIdentityPath("signcert.org1.pem")
+	keyfile := util.GetIdentityPath("signkey.org1")
 	cafile := util.GetIdentityPath("ca.org1.pem")
 
 	cfg := &config.IdentityConfig{
