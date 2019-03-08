@@ -5,7 +5,6 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 	"net"
-	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/config"
@@ -18,7 +17,6 @@ type GRPCServer struct {
 	address   string
 	listener  net.Listener
 	server    *grpc.Server
-	lock      sync.Mutex
 	tlsConfig *tls.Config
 }
 
