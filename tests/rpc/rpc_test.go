@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/protos"
 	"github.com/stretchr/testify/assert"
@@ -52,6 +53,34 @@ func TestGetConnectionInfo(t *testing.T) {
 	case msg := <-m1:
 		assert.Equal(t, inst2.GetPKIid(), msg.GetConnectionInfo().ID)
 		assert.NotNil(t, msg.GetSourceEnvelope())
+	}
+}
+
+func TestHandshake(t *testing.T) {
+	_, err := inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: []byte("localhost:10053")})
+	assert.Error(t, err, "PKI-ID of remote peer doesn't match expected PKI-ID")
+
+	id, err := inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
+	assert.NoError(t, err)
+	sid := &protos.SerializedIdentity{}
+	err = proto.Unmarshal(id, sid)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "peer0.org1", sid.NodeId)
+}
+
+func TestNonResponsivePing(t *testing.T) {
+	s := make(chan error)
+	go func() {
+		err := inst1.Probe(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: []byte("localhost:10053")})
+		s <- err
+	}()
+
+	select {
+	case <-time.After(time.Second * 10):
+		assert.Fail(t, "Request wasn't cancelled on time")
+	case err := <-s:
+		assert.Nil(t, err)
 	}
 }
 
