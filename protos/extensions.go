@@ -225,6 +225,16 @@ func (m *RKSyncMessage) IsStateInfoMsg() bool {
 	return m.GetStateInfo() != nil
 }
 
+// IsDataMsg returns whether this RKSyncMessage is a data message
+func (m *RKSyncMessage) IsDataMsg() bool {
+	return m.GetDataMsg() != nil
+}
+
+// IsDataReq returns whether this RKSyncMessage is a data request
+func (m *RKSyncMessage) IsDataReq() bool {
+	return m.GetDataReq() != nil
+}
+
 // IsTagLegal checks the RKSyncMessage tags and inner type
 func (m *RKSyncMessage) IsTagLegal() error {
 	if m.IsAliveMsg() || m.GetMemReq() != nil || m.GetMemRes() != nil {
@@ -273,4 +283,14 @@ func (si *ChainStateInfo) Sign(signer Signer) (*Envelope, error) {
 	}
 
 	return e, nil
+}
+
+// IsAppend returns whether this Payload is a append message
+func (p *Payload) IsAppend() bool {
+	return p.GetAppend() != nil
+}
+
+// IsAppend returns whether this DataRequest is a append message
+func (r *DataRequest) IsAppend() bool {
+	return r.GetAppend() != nil
 }

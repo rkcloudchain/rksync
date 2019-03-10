@@ -25,11 +25,6 @@ message Envelope {
     bytes signature = 2;
 }
 
-message Payload {
-    uint64 seq_num = 1;
-    bytes data = 2;
-}
-
 message RKSyncMessage {
     uint64 nonce = 1;
     bytes channel = 2;
@@ -49,6 +44,8 @@ message RKSyncMessage {
         ChainStatePullRequest state_pull_request = 12;
         ChainStatePullResponse state_pull_response = 13;
         ChainStateInfo state_info = 14;
+        DataMessage data_msg = 15;
+        DataRequest data_req = 16;
     }
 }
 
@@ -118,4 +115,33 @@ message ChainStatePullResponse {
 
 message ChainStatePullRequest {
     bytes chain_mac = 1;
+}
+
+message DataMessage {
+    string file_name = 1;
+    Payload payload = 2;
+}
+
+message Payload {
+    bytes data = 1;
+    oneof metadata {
+        AppendMetadata append = 3;
+    }
+}
+
+message AppendMetadata {
+    int64 start = 1;
+    int64 length = 2;
+}
+
+message DataRequest {
+    string file_name = 1;
+    bytes pki_id = 2;
+    oneof req {
+        AppendRequest append = 4;
+    }
+}
+
+message AppendRequest {
+    int64 length = 1;
 }

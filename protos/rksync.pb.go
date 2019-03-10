@@ -47,7 +47,7 @@ func (x RKSyncMessage_Tag) String() string {
 }
 
 func (RKSyncMessage_Tag) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{2, 0}
+	return fileDescriptor_cff4fef9b2151f97, []int{1, 0}
 }
 
 type File_Mode int32
@@ -72,7 +72,7 @@ func (x File_Mode) String() string {
 }
 
 func (File_Mode) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{13, 0}
+	return fileDescriptor_cff4fef9b2151f97, []int{12, 0}
 }
 
 type Envelope struct {
@@ -116,47 +116,6 @@ func (m *Envelope) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Envelope proto.InternalMessageInfo
 
-type Payload struct {
-	SeqNum               uint64   `protobuf:"varint,1,opt,name=seq_num,json=seqNum,proto3" json:"seq_num,omitempty"`
-	Data                 []byte   `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *Payload) Reset()         { *m = Payload{} }
-func (m *Payload) String() string { return proto.CompactTextString(m) }
-func (*Payload) ProtoMessage()    {}
-func (*Payload) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{1}
-}
-func (m *Payload) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *Payload) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_Payload.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *Payload) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Payload.Merge(m, src)
-}
-func (m *Payload) XXX_Size() int {
-	return m.Size()
-}
-func (m *Payload) XXX_DiscardUnknown() {
-	xxx_messageInfo_Payload.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_Payload proto.InternalMessageInfo
-
 type RKSyncMessage struct {
 	Nonce   uint64            `protobuf:"varint,1,opt,name=nonce,proto3" json:"nonce,omitempty"`
 	Channel []byte            `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
@@ -172,6 +131,8 @@ type RKSyncMessage struct {
 	//	*RKSyncMessage_StatePullRequest
 	//	*RKSyncMessage_StatePullResponse
 	//	*RKSyncMessage_StateInfo
+	//	*RKSyncMessage_DataMsg
+	//	*RKSyncMessage_DataReq
 	Content              isRKSyncMessage_Content `protobuf_oneof:"content"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
@@ -182,7 +143,7 @@ func (m *RKSyncMessage) Reset()         { *m = RKSyncMessage{} }
 func (m *RKSyncMessage) String() string { return proto.CompactTextString(m) }
 func (*RKSyncMessage) ProtoMessage()    {}
 func (*RKSyncMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{2}
+	return fileDescriptor_cff4fef9b2151f97, []int{1}
 }
 func (m *RKSyncMessage) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -247,6 +208,12 @@ type RKSyncMessage_StatePullResponse struct {
 type RKSyncMessage_StateInfo struct {
 	StateInfo *ChainStateInfo `protobuf:"bytes,14,opt,name=state_info,json=stateInfo,proto3,oneof"`
 }
+type RKSyncMessage_DataMsg struct {
+	DataMsg *DataMessage `protobuf:"bytes,15,opt,name=data_msg,json=dataMsg,proto3,oneof"`
+}
+type RKSyncMessage_DataReq struct {
+	DataReq *DataRequest `protobuf:"bytes,16,opt,name=data_req,json=dataReq,proto3,oneof"`
+}
 
 func (*RKSyncMessage_AliveMsg) isRKSyncMessage_Content()          {}
 func (*RKSyncMessage_Empty) isRKSyncMessage_Content()             {}
@@ -258,6 +225,8 @@ func (*RKSyncMessage_State) isRKSyncMessage_Content()             {}
 func (*RKSyncMessage_StatePullRequest) isRKSyncMessage_Content()  {}
 func (*RKSyncMessage_StatePullResponse) isRKSyncMessage_Content() {}
 func (*RKSyncMessage_StateInfo) isRKSyncMessage_Content()         {}
+func (*RKSyncMessage_DataMsg) isRKSyncMessage_Content()           {}
+func (*RKSyncMessage_DataReq) isRKSyncMessage_Content()           {}
 
 func (m *RKSyncMessage) GetContent() isRKSyncMessage_Content {
 	if m != nil {
@@ -336,6 +305,20 @@ func (m *RKSyncMessage) GetStateInfo() *ChainStateInfo {
 	return nil
 }
 
+func (m *RKSyncMessage) GetDataMsg() *DataMessage {
+	if x, ok := m.GetContent().(*RKSyncMessage_DataMsg); ok {
+		return x.DataMsg
+	}
+	return nil
+}
+
+func (m *RKSyncMessage) GetDataReq() *DataRequest {
+	if x, ok := m.GetContent().(*RKSyncMessage_DataReq); ok {
+		return x.DataReq
+	}
+	return nil
+}
+
 // XXX_OneofFuncs is for the internal use of the proto package.
 func (*RKSyncMessage) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
 	return _RKSyncMessage_OneofMarshaler, _RKSyncMessage_OneofUnmarshaler, _RKSyncMessage_OneofSizer, []interface{}{
@@ -349,6 +332,8 @@ func (*RKSyncMessage) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer)
 		(*RKSyncMessage_StatePullRequest)(nil),
 		(*RKSyncMessage_StatePullResponse)(nil),
 		(*RKSyncMessage_StateInfo)(nil),
+		(*RKSyncMessage_DataMsg)(nil),
+		(*RKSyncMessage_DataReq)(nil),
 	}
 }
 
@@ -404,6 +389,16 @@ func _RKSyncMessage_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
 	case *RKSyncMessage_StateInfo:
 		_ = b.EncodeVarint(14<<3 | proto.WireBytes)
 		if err := b.EncodeMessage(x.StateInfo); err != nil {
+			return err
+		}
+	case *RKSyncMessage_DataMsg:
+		_ = b.EncodeVarint(15<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.DataMsg); err != nil {
+			return err
+		}
+	case *RKSyncMessage_DataReq:
+		_ = b.EncodeVarint(16<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.DataReq); err != nil {
 			return err
 		}
 	case nil:
@@ -496,6 +491,22 @@ func _RKSyncMessage_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.
 		err := b.DecodeMessage(msg)
 		m.Content = &RKSyncMessage_StateInfo{msg}
 		return true, err
+	case 15: // content.data_msg
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(DataMessage)
+		err := b.DecodeMessage(msg)
+		m.Content = &RKSyncMessage_DataMsg{msg}
+		return true, err
+	case 16: // content.data_req
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(DataRequest)
+		err := b.DecodeMessage(msg)
+		m.Content = &RKSyncMessage_DataReq{msg}
+		return true, err
 	default:
 		return false, nil
 	}
@@ -555,6 +566,16 @@ func _RKSyncMessage_OneofSizer(msg proto.Message) (n int) {
 		n += 1 // tag and wire
 		n += proto.SizeVarint(uint64(s))
 		n += s
+	case *RKSyncMessage_DataMsg:
+		s := proto.Size(x.DataMsg)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case *RKSyncMessage_DataReq:
+		s := proto.Size(x.DataReq)
+		n += 2 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
 	case nil:
 	default:
 		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
@@ -574,7 +595,7 @@ func (m *ConnEstablish) Reset()         { *m = ConnEstablish{} }
 func (m *ConnEstablish) String() string { return proto.CompactTextString(m) }
 func (*ConnEstablish) ProtoMessage()    {}
 func (*ConnEstablish) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{3}
+	return fileDescriptor_cff4fef9b2151f97, []int{2}
 }
 func (m *ConnEstablish) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -616,7 +637,7 @@ func (m *AliveMessage) Reset()         { *m = AliveMessage{} }
 func (m *AliveMessage) String() string { return proto.CompactTextString(m) }
 func (*AliveMessage) ProtoMessage()    {}
 func (*AliveMessage) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{4}
+	return fileDescriptor_cff4fef9b2151f97, []int{3}
 }
 func (m *AliveMessage) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -657,7 +678,7 @@ func (m *PeerTime) Reset()         { *m = PeerTime{} }
 func (m *PeerTime) String() string { return proto.CompactTextString(m) }
 func (*PeerTime) ProtoMessage()    {}
 func (*PeerTime) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{5}
+	return fileDescriptor_cff4fef9b2151f97, []int{4}
 }
 func (m *PeerTime) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -698,7 +719,7 @@ func (m *Member) Reset()         { *m = Member{} }
 func (m *Member) String() string { return proto.CompactTextString(m) }
 func (*Member) ProtoMessage()    {}
 func (*Member) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{6}
+	return fileDescriptor_cff4fef9b2151f97, []int{5}
 }
 func (m *Member) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -738,7 +759,7 @@ func (m *Acknowledgement) Reset()         { *m = Acknowledgement{} }
 func (m *Acknowledgement) String() string { return proto.CompactTextString(m) }
 func (*Acknowledgement) ProtoMessage()    {}
 func (*Acknowledgement) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{7}
+	return fileDescriptor_cff4fef9b2151f97, []int{6}
 }
 func (m *Acknowledgement) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -779,7 +800,7 @@ func (m *MembershipRequest) Reset()         { *m = MembershipRequest{} }
 func (m *MembershipRequest) String() string { return proto.CompactTextString(m) }
 func (*MembershipRequest) ProtoMessage()    {}
 func (*MembershipRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{8}
+	return fileDescriptor_cff4fef9b2151f97, []int{7}
 }
 func (m *MembershipRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -820,7 +841,7 @@ func (m *MembershipResponse) Reset()         { *m = MembershipResponse{} }
 func (m *MembershipResponse) String() string { return proto.CompactTextString(m) }
 func (*MembershipResponse) ProtoMessage()    {}
 func (*MembershipResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{9}
+	return fileDescriptor_cff4fef9b2151f97, []int{8}
 }
 func (m *MembershipResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -862,7 +883,7 @@ func (m *ChainState) Reset()         { *m = ChainState{} }
 func (m *ChainState) String() string { return proto.CompactTextString(m) }
 func (*ChainState) ProtoMessage()    {}
 func (*ChainState) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{10}
+	return fileDescriptor_cff4fef9b2151f97, []int{9}
 }
 func (m *ChainState) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -903,7 +924,7 @@ func (m *ChainStateInfo) Reset()         { *m = ChainStateInfo{} }
 func (m *ChainStateInfo) String() string { return proto.CompactTextString(m) }
 func (*ChainStateInfo) ProtoMessage()    {}
 func (*ChainStateInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{11}
+	return fileDescriptor_cff4fef9b2151f97, []int{10}
 }
 func (m *ChainStateInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -944,7 +965,7 @@ func (m *Properties) Reset()         { *m = Properties{} }
 func (m *Properties) String() string { return proto.CompactTextString(m) }
 func (*Properties) ProtoMessage()    {}
 func (*Properties) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{12}
+	return fileDescriptor_cff4fef9b2151f97, []int{11}
 }
 func (m *Properties) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -985,7 +1006,7 @@ func (m *File) Reset()         { *m = File{} }
 func (m *File) String() string { return proto.CompactTextString(m) }
 func (*File) ProtoMessage()    {}
 func (*File) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{13}
+	return fileDescriptor_cff4fef9b2151f97, []int{12}
 }
 func (m *File) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1025,7 +1046,7 @@ func (m *ChainStatePullResponse) Reset()         { *m = ChainStatePullResponse{}
 func (m *ChainStatePullResponse) String() string { return proto.CompactTextString(m) }
 func (*ChainStatePullResponse) ProtoMessage()    {}
 func (*ChainStatePullResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{14}
+	return fileDescriptor_cff4fef9b2151f97, []int{13}
 }
 func (m *ChainStatePullResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1065,7 +1086,7 @@ func (m *ChainStatePullRequest) Reset()         { *m = ChainStatePullRequest{} }
 func (m *ChainStatePullRequest) String() string { return proto.CompactTextString(m) }
 func (*ChainStatePullRequest) ProtoMessage()    {}
 func (*ChainStatePullRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_cff4fef9b2151f97, []int{15}
+	return fileDescriptor_cff4fef9b2151f97, []int{14}
 }
 func (m *ChainStatePullRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1094,11 +1115,381 @@ func (m *ChainStatePullRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ChainStatePullRequest proto.InternalMessageInfo
 
+type DataMessage struct {
+	FileName             string   `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	Payload              *Payload `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *DataMessage) Reset()         { *m = DataMessage{} }
+func (m *DataMessage) String() string { return proto.CompactTextString(m) }
+func (*DataMessage) ProtoMessage()    {}
+func (*DataMessage) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cff4fef9b2151f97, []int{15}
+}
+func (m *DataMessage) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DataMessage) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DataMessage.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *DataMessage) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DataMessage.Merge(m, src)
+}
+func (m *DataMessage) XXX_Size() int {
+	return m.Size()
+}
+func (m *DataMessage) XXX_DiscardUnknown() {
+	xxx_messageInfo_DataMessage.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DataMessage proto.InternalMessageInfo
+
+type Payload struct {
+	Data []byte `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	// Types that are valid to be assigned to Metadata:
+	//	*Payload_Append
+	Metadata             isPayload_Metadata `protobuf_oneof:"metadata"`
+	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
+	XXX_unrecognized     []byte             `json:"-"`
+	XXX_sizecache        int32              `json:"-"`
+}
+
+func (m *Payload) Reset()         { *m = Payload{} }
+func (m *Payload) String() string { return proto.CompactTextString(m) }
+func (*Payload) ProtoMessage()    {}
+func (*Payload) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cff4fef9b2151f97, []int{16}
+}
+func (m *Payload) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *Payload) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_Payload.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *Payload) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Payload.Merge(m, src)
+}
+func (m *Payload) XXX_Size() int {
+	return m.Size()
+}
+func (m *Payload) XXX_DiscardUnknown() {
+	xxx_messageInfo_Payload.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Payload proto.InternalMessageInfo
+
+type isPayload_Metadata interface {
+	isPayload_Metadata()
+	MarshalTo([]byte) (int, error)
+	Size() int
+}
+
+type Payload_Append struct {
+	Append *AppendMetadata `protobuf:"bytes,3,opt,name=append,proto3,oneof"`
+}
+
+func (*Payload_Append) isPayload_Metadata() {}
+
+func (m *Payload) GetMetadata() isPayload_Metadata {
+	if m != nil {
+		return m.Metadata
+	}
+	return nil
+}
+
+func (m *Payload) GetAppend() *AppendMetadata {
+	if x, ok := m.GetMetadata().(*Payload_Append); ok {
+		return x.Append
+	}
+	return nil
+}
+
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*Payload) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _Payload_OneofMarshaler, _Payload_OneofUnmarshaler, _Payload_OneofSizer, []interface{}{
+		(*Payload_Append)(nil),
+	}
+}
+
+func _Payload_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*Payload)
+	// metadata
+	switch x := m.Metadata.(type) {
+	case *Payload_Append:
+		_ = b.EncodeVarint(3<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Append); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("Payload.Metadata has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _Payload_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*Payload)
+	switch tag {
+	case 3: // metadata.append
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(AppendMetadata)
+		err := b.DecodeMessage(msg)
+		m.Metadata = &Payload_Append{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _Payload_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*Payload)
+	// metadata
+	switch x := m.Metadata.(type) {
+	case *Payload_Append:
+		s := proto.Size(x.Append)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
+}
+
+type AppendMetadata struct {
+	Start                int64    `protobuf:"varint,1,opt,name=start,proto3" json:"start,omitempty"`
+	Length               int64    `protobuf:"varint,2,opt,name=length,proto3" json:"length,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *AppendMetadata) Reset()         { *m = AppendMetadata{} }
+func (m *AppendMetadata) String() string { return proto.CompactTextString(m) }
+func (*AppendMetadata) ProtoMessage()    {}
+func (*AppendMetadata) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cff4fef9b2151f97, []int{17}
+}
+func (m *AppendMetadata) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *AppendMetadata) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_AppendMetadata.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *AppendMetadata) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AppendMetadata.Merge(m, src)
+}
+func (m *AppendMetadata) XXX_Size() int {
+	return m.Size()
+}
+func (m *AppendMetadata) XXX_DiscardUnknown() {
+	xxx_messageInfo_AppendMetadata.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AppendMetadata proto.InternalMessageInfo
+
+type DataRequest struct {
+	FileName string `protobuf:"bytes,1,opt,name=file_name,json=fileName,proto3" json:"file_name,omitempty"`
+	PkiId    []byte `protobuf:"bytes,2,opt,name=pki_id,json=pkiId,proto3" json:"pki_id,omitempty"`
+	// Types that are valid to be assigned to Req:
+	//	*DataRequest_Append
+	Req                  isDataRequest_Req `protobuf_oneof:"req"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
+}
+
+func (m *DataRequest) Reset()         { *m = DataRequest{} }
+func (m *DataRequest) String() string { return proto.CompactTextString(m) }
+func (*DataRequest) ProtoMessage()    {}
+func (*DataRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cff4fef9b2151f97, []int{18}
+}
+func (m *DataRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DataRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DataRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *DataRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DataRequest.Merge(m, src)
+}
+func (m *DataRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *DataRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_DataRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DataRequest proto.InternalMessageInfo
+
+type isDataRequest_Req interface {
+	isDataRequest_Req()
+	MarshalTo([]byte) (int, error)
+	Size() int
+}
+
+type DataRequest_Append struct {
+	Append *AppendRequest `protobuf:"bytes,4,opt,name=append,proto3,oneof"`
+}
+
+func (*DataRequest_Append) isDataRequest_Req() {}
+
+func (m *DataRequest) GetReq() isDataRequest_Req {
+	if m != nil {
+		return m.Req
+	}
+	return nil
+}
+
+func (m *DataRequest) GetAppend() *AppendRequest {
+	if x, ok := m.GetReq().(*DataRequest_Append); ok {
+		return x.Append
+	}
+	return nil
+}
+
+// XXX_OneofFuncs is for the internal use of the proto package.
+func (*DataRequest) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
+	return _DataRequest_OneofMarshaler, _DataRequest_OneofUnmarshaler, _DataRequest_OneofSizer, []interface{}{
+		(*DataRequest_Append)(nil),
+	}
+}
+
+func _DataRequest_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
+	m := msg.(*DataRequest)
+	// req
+	switch x := m.Req.(type) {
+	case *DataRequest_Append:
+		_ = b.EncodeVarint(4<<3 | proto.WireBytes)
+		if err := b.EncodeMessage(x.Append); err != nil {
+			return err
+		}
+	case nil:
+	default:
+		return fmt.Errorf("DataRequest.Req has unexpected type %T", x)
+	}
+	return nil
+}
+
+func _DataRequest_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
+	m := msg.(*DataRequest)
+	switch tag {
+	case 4: // req.append
+		if wire != proto.WireBytes {
+			return true, proto.ErrInternalBadWireType
+		}
+		msg := new(AppendRequest)
+		err := b.DecodeMessage(msg)
+		m.Req = &DataRequest_Append{msg}
+		return true, err
+	default:
+		return false, nil
+	}
+}
+
+func _DataRequest_OneofSizer(msg proto.Message) (n int) {
+	m := msg.(*DataRequest)
+	// req
+	switch x := m.Req.(type) {
+	case *DataRequest_Append:
+		s := proto.Size(x.Append)
+		n += 1 // tag and wire
+		n += proto.SizeVarint(uint64(s))
+		n += s
+	case nil:
+	default:
+		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
+	}
+	return n
+}
+
+type AppendRequest struct {
+	Length               int64    `protobuf:"varint,1,opt,name=length,proto3" json:"length,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *AppendRequest) Reset()         { *m = AppendRequest{} }
+func (m *AppendRequest) String() string { return proto.CompactTextString(m) }
+func (*AppendRequest) ProtoMessage()    {}
+func (*AppendRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cff4fef9b2151f97, []int{19}
+}
+func (m *AppendRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *AppendRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_AppendRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *AppendRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_AppendRequest.Merge(m, src)
+}
+func (m *AppendRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *AppendRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_AppendRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_AppendRequest proto.InternalMessageInfo
+
 func init() {
 	proto.RegisterEnum("protos.RKSyncMessage_Tag", RKSyncMessage_Tag_name, RKSyncMessage_Tag_value)
 	proto.RegisterEnum("protos.File_Mode", File_Mode_name, File_Mode_value)
 	proto.RegisterType((*Envelope)(nil), "protos.Envelope")
-	proto.RegisterType((*Payload)(nil), "protos.Payload")
 	proto.RegisterType((*RKSyncMessage)(nil), "protos.RKSyncMessage")
 	proto.RegisterType((*ConnEstablish)(nil), "protos.ConnEstablish")
 	proto.RegisterType((*AliveMessage)(nil), "protos.AliveMessage")
@@ -1113,6 +1504,11 @@ func init() {
 	proto.RegisterType((*File)(nil), "protos.File")
 	proto.RegisterType((*ChainStatePullResponse)(nil), "protos.ChainStatePullResponse")
 	proto.RegisterType((*ChainStatePullRequest)(nil), "protos.ChainStatePullRequest")
+	proto.RegisterType((*DataMessage)(nil), "protos.DataMessage")
+	proto.RegisterType((*Payload)(nil), "protos.Payload")
+	proto.RegisterType((*AppendMetadata)(nil), "protos.AppendMetadata")
+	proto.RegisterType((*DataRequest)(nil), "protos.DataRequest")
+	proto.RegisterType((*AppendRequest)(nil), "protos.AppendRequest")
 }
 
 func init() {
@@ -1120,73 +1516,83 @@ func init() {
 }
 
 var fileDescriptor_cff4fef9b2151f97 = []byte{
-	// 1043 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x56, 0x6d, 0x6f, 0x1b, 0x45,
-	0x10, 0xbe, 0x8b, 0xdf, 0xe2, 0xc9, 0x4b, 0xdd, 0xa5, 0x49, 0x0f, 0x17, 0x4c, 0x74, 0xa2, 0x10,
-	0xb5, 0xe8, 0x82, 0xdc, 0x52, 0x90, 0x8a, 0x84, 0x92, 0x12, 0xe4, 0x00, 0x0e, 0xd6, 0x25, 0x5f,
-	0x8a, 0x90, 0xac, 0xf5, 0xdd, 0xf8, 0xbc, 0xf2, 0xdd, 0xee, 0xe5, 0xf6, 0x5c, 0x14, 0x7e, 0x02,
-	0xbf, 0x80, 0x9f, 0x54, 0xf1, 0xa9, 0x3f, 0x81, 0x86, 0x3f, 0x82, 0x76, 0xef, 0xc5, 0x76, 0xec,
-	0x48, 0x7c, 0xf2, 0xce, 0xce, 0xf3, 0x3c, 0x37, 0x3b, 0x3b, 0x33, 0x6b, 0xe8, 0x06, 0x2c, 0x9d,
-	0xcc, 0x46, 0x8e, 0x27, 0xa2, 0xa3, 0x64, 0xea, 0x85, 0x62, 0xe6, 0x7b, 0x13, 0xca, 0xf8, 0x51,
-	0x32, 0x95, 0xd7, 0xdc, 0x3b, 0x8a, 0x13, 0x91, 0x0a, 0x99, 0x5b, 0x8e, 0xb6, 0x48, 0x3d, 0xdb,
-	0x6c, 0x3f, 0x0a, 0x84, 0x08, 0x42, 0xcc, 0x30, 0xa3, 0xd9, 0xf8, 0x08, 0xa3, 0x38, 0xbd, 0xce,
-	0x40, 0xed, 0x07, 0x81, 0x08, 0x84, 0x5e, 0x1e, 0xa9, 0x55, 0xb6, 0x6b, 0x9f, 0xc0, 0xe6, 0x29,
-	0x7f, 0x83, 0xa1, 0x88, 0x91, 0x58, 0xd0, 0x88, 0xe9, 0x75, 0x28, 0xa8, 0x6f, 0x99, 0x07, 0xe6,
-	0xe1, 0xb6, 0x5b, 0x98, 0xe4, 0x23, 0x68, 0x4a, 0x16, 0x70, 0x9a, 0xce, 0x12, 0xb4, 0x36, 0xb4,
-	0x6f, 0xbe, 0x61, 0xbf, 0x80, 0xc6, 0x20, 0x07, 0x3e, 0x84, 0x86, 0xc4, 0xab, 0x21, 0x9f, 0x45,
-	0x5a, 0xa2, 0xea, 0xd6, 0x25, 0x5e, 0x9d, 0xcf, 0x22, 0x42, 0xa0, 0xea, 0xd3, 0x94, 0xe6, 0x64,
-	0xbd, 0xb6, 0xff, 0xae, 0xc1, 0x8e, 0xfb, 0xd3, 0xc5, 0x35, 0xf7, 0xfa, 0x28, 0x25, 0x0d, 0x90,
-	0x3c, 0x80, 0x1a, 0x17, 0xdc, 0xc3, 0x9c, 0x9c, 0x19, 0x2a, 0x2e, 0x6f, 0x42, 0x39, 0xc7, 0x30,
-	0xa7, 0x17, 0x26, 0x79, 0x0a, 0x95, 0x94, 0x06, 0x56, 0xe5, 0xc0, 0x3c, 0xdc, 0xed, 0x7e, 0x98,
-	0x1d, 0x49, 0x3a, 0x4b, 0x9a, 0xce, 0x25, 0x0d, 0x5c, 0x85, 0x22, 0xcf, 0xa0, 0x49, 0x43, 0xf6,
-	0x06, 0x87, 0x91, 0x0c, 0xac, 0xda, 0x81, 0x79, 0xb8, 0xd5, 0x7d, 0x50, 0x50, 0x8e, 0x95, 0x23,
-	0x67, 0xf4, 0x0c, 0x77, 0x53, 0x03, 0xfb, 0x32, 0x20, 0x0e, 0xd4, 0x74, 0x12, 0xad, 0xba, 0x26,
-	0xec, 0x3b, 0x59, 0x8a, 0x9d, 0x22, 0xc5, 0xce, 0xa9, 0xf2, 0xf6, 0x0c, 0x37, 0x83, 0x91, 0xa7,
-	0x50, 0xf5, 0x04, 0xe7, 0x56, 0x43, 0xc3, 0xf7, 0x0a, 0xfd, 0x57, 0x82, 0xf3, 0x53, 0x99, 0xd2,
-	0x51, 0xc8, 0xe4, 0xa4, 0x67, 0xb8, 0x1a, 0xa4, 0xc2, 0xa7, 0xde, 0xd4, 0xda, 0xd4, 0xd8, 0x87,
-	0x65, 0x2c, 0xde, 0x94, 0x8b, 0xdf, 0x43, 0xf4, 0x03, 0x8c, 0x90, 0xa7, 0x3d, 0xc3, 0x55, 0x28,
-	0xf2, 0x1c, 0x1a, 0x11, 0x46, 0xc3, 0x04, 0xaf, 0xac, 0xa6, 0x26, 0x94, 0xe7, 0xed, 0x63, 0x34,
-	0xc2, 0x44, 0x4e, 0x58, 0xec, 0xe2, 0xd5, 0x0c, 0xa5, 0xa2, 0xd4, 0x23, 0x8c, 0x5c, 0xbc, 0x22,
-	0x5f, 0x15, 0x2c, 0x69, 0x81, 0x66, 0xb5, 0xd7, 0xb1, 0x64, 0x2c, 0xb8, 0xc4, 0x92, 0x26, 0xc9,
-	0x13, 0xa8, 0xc9, 0x94, 0xa6, 0x68, 0x6d, 0x69, 0x12, 0x29, 0xcf, 0xa1, 0x4a, 0xf1, 0x42, 0x79,
-	0xd4, 0x91, 0x35, 0x84, 0xf4, 0x81, 0xe8, 0xc5, 0x30, 0x9e, 0x85, 0xa1, 0x8a, 0x4f, 0x85, 0x60,
-	0x6d, 0x6b, 0xe2, 0xc7, 0xab, 0xc4, 0xc1, 0x2c, 0x0c, 0xe7, 0x71, 0xb6, 0xe4, 0xad, 0x3d, 0x32,
-	0x80, 0x0f, 0x96, 0xe4, 0xb2, 0xd8, 0xac, 0x1d, 0xad, 0xd7, 0xb9, 0x4b, 0xaf, 0x3c, 0xc1, 0x7d,
-	0x79, 0x7b, 0x93, 0x7c, 0x0d, 0x90, 0x29, 0x32, 0x3e, 0x16, 0xd6, 0x6e, 0x7e, 0x91, 0x2b, 0x42,
-	0x67, 0x7c, 0x2c, 0x7a, 0x86, 0xdb, 0x94, 0x85, 0x61, 0x7f, 0x02, 0x95, 0x4b, 0x1a, 0x90, 0x26,
-	0xd4, 0x4e, 0xfb, 0x83, 0xcb, 0xd7, 0x2d, 0x83, 0xec, 0x40, 0xf3, 0x55, 0xef, 0xf8, 0x7c, 0xf8,
-	0xcb, 0xf9, 0xcf, 0xaf, 0x5b, 0xe6, 0x49, 0x13, 0x1a, 0x9e, 0xe0, 0x29, 0xf2, 0xd4, 0x3e, 0x81,
-	0x9d, 0xa5, 0x4b, 0x26, 0x7b, 0x50, 0x8f, 0xa7, 0x6c, 0xc8, 0x8a, 0x66, 0xaa, 0xc5, 0x53, 0x76,
-	0xe6, 0x93, 0x36, 0x6c, 0x32, 0x1f, 0x79, 0xca, 0xd2, 0xeb, 0xbc, 0x9a, 0x4b, 0xdb, 0xfe, 0xd3,
-	0x84, 0xed, 0xc5, 0x4a, 0x24, 0x0e, 0x40, 0x54, 0x5e, 0x93, 0xd6, 0xd9, 0xea, 0xee, 0x2e, 0x5f,
-	0xa0, 0xbb, 0x80, 0x20, 0x0e, 0x34, 0x53, 0x16, 0xa1, 0x4c, 0x69, 0x14, 0x6b, 0xf5, 0xad, 0x6e,
-	0xab, 0x80, 0x0f, 0x10, 0x93, 0x4b, 0x16, 0xa1, 0x3b, 0x87, 0x2c, 0x05, 0x53, 0xb9, 0x15, 0xcc,
-	0xb7, 0xb0, 0x59, 0x50, 0x54, 0x5b, 0x33, 0xee, 0x2d, 0xb6, 0x35, 0xe3, 0x9e, 0x6a, 0xeb, 0x85,
-	0x7e, 0xdf, 0x58, 0xec, 0x77, 0xfb, 0x25, 0xd4, 0xb3, 0xf8, 0xd4, 0x37, 0x90, 0xfb, 0xb1, 0x60,
-	0x3c, 0xd5, 0xe4, 0xa6, 0x5b, 0xda, 0x0b, 0x39, 0xda, 0x58, 0xc8, 0x91, 0xfd, 0x39, 0xdc, 0xbb,
-	0xd5, 0x04, 0x6a, 0x32, 0x60, 0x92, 0x88, 0x24, 0x97, 0xc8, 0x0c, 0x7b, 0x0c, 0xf7, 0x57, 0x8a,
-	0x9f, 0xbc, 0x84, 0x96, 0xc4, 0x70, 0xac, 0x6f, 0x3b, 0x89, 0x68, 0xca, 0x04, 0xcf, 0x53, 0x57,
-	0xe6, 0xa2, 0x18, 0x79, 0xee, 0x3d, 0x85, 0x3c, 0x9b, 0x03, 0xd5, 0x77, 0xd4, 0x87, 0xb9, 0xb5,
-	0x71, 0x50, 0x51, 0x01, 0x69, 0xc3, 0x1e, 0x01, 0x59, 0x6d, 0x17, 0xf2, 0x19, 0xd4, 0xf4, 0x9c,
-	0xb0, 0xcc, 0x83, 0xca, 0x5a, 0xf5, 0xcc, 0x4d, 0x3e, 0x85, 0xaa, 0x8f, 0xd4, 0xd7, 0x92, 0xeb,
-	0x60, 0xda, 0x6b, 0xc7, 0x00, 0xf3, 0x5a, 0xbc, 0x7b, 0x90, 0x3e, 0x82, 0xa6, 0x7e, 0x0f, 0x86,
-	0x11, 0xf5, 0x8a, 0x02, 0xd2, 0x1b, 0x7d, 0xea, 0x91, 0x2f, 0x54, 0xae, 0x33, 0x55, 0x7d, 0x9f,
-	0xeb, 0xbe, 0x56, 0x22, 0xec, 0xdf, 0x60, 0x77, 0xb9, 0xfa, 0xc9, 0x3e, 0xd4, 0x43, 0xa4, 0x3e,
-	0x26, 0x79, 0xcd, 0xe6, 0x16, 0xe9, 0x02, 0xc4, 0x89, 0x88, 0x31, 0x49, 0x19, 0xca, 0xbc, 0xb0,
-	0xca, 0x99, 0x30, 0x28, 0x3d, 0xee, 0x02, 0xca, 0xfe, 0x11, 0x60, 0xee, 0x51, 0x33, 0x3c, 0xaf,
-	0x53, 0x9d, 0xad, 0x6d, 0xb7, 0x30, 0x89, 0x0d, 0xb5, 0x31, 0x0b, 0xb5, 0xac, 0x4a, 0xcf, 0x76,
-	0x21, 0xfb, 0x03, 0x0b, 0xd1, 0xcd, 0x5c, 0x36, 0x85, 0xaa, 0x32, 0xd5, 0x2b, 0x12, 0xd3, 0x74,
-	0x92, 0x17, 0x81, 0x5e, 0x93, 0xc7, 0x50, 0x8d, 0x84, 0x9f, 0x3d, 0x4b, 0xbb, 0xdd, 0xfb, 0x8b,
-	0x74, 0xa7, 0x2f, 0x7c, 0x74, 0xb5, 0xdb, 0xee, 0x40, 0x55, 0x59, 0x04, 0xa0, 0x7e, 0x1c, 0xc7,
-	0xc8, 0xfd, 0x96, 0xa1, 0xd6, 0x2e, 0xe5, 0xbe, 0x88, 0x5a, 0xa6, 0xfd, 0x3d, 0xec, 0xaf, 0x9f,
-	0x29, 0xe4, 0x09, 0x34, 0x30, 0xd4, 0x55, 0x78, 0x67, 0x19, 0x15, 0x00, 0xfb, 0x39, 0xec, 0xad,
-	0x9d, 0x74, 0xcb, 0xd7, 0x66, 0x2e, 0x5f, 0x5b, 0xf7, 0x0f, 0xa8, 0x67, 0x6f, 0x16, 0x79, 0x01,
-	0xa0, 0x7e, 0x2f, 0xd2, 0x04, 0x69, 0x44, 0x56, 0x3e, 0xd4, 0x5e, 0xd9, 0xb1, 0x8d, 0x43, 0xf3,
-	0x4b, 0x93, 0x7c, 0x03, 0xd5, 0x01, 0xe3, 0x01, 0xb9, 0xe3, 0x7d, 0x6a, 0xdf, 0xb1, 0x6f, 0x1b,
-	0x27, 0xdf, 0xbd, 0x7d, 0xdf, 0x31, 0xde, 0xbd, 0xef, 0x98, 0x6f, 0x6f, 0x3a, 0xe6, 0xbb, 0x9b,
-	0x8e, 0xf9, 0xcf, 0x4d, 0xc7, 0xfc, 0xeb, 0xdf, 0x8e, 0xf1, 0xeb, 0xe3, 0xff, 0xf5, 0x4f, 0x64,
-	0x94, 0xfd, 0xf9, 0x78, 0xf6, 0x5f, 0x00, 0x00, 0x00, 0xff, 0xff, 0x79, 0x77, 0x0b, 0x51, 0xb9,
-	0x08, 0x00, 0x00,
+	// 1205 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x56, 0xdb, 0x6e, 0xdb, 0x46,
+	0x13, 0x16, 0xad, 0xf3, 0xf8, 0xa4, 0x6c, 0x4e, 0xfc, 0x9d, 0xbf, 0xaa, 0x41, 0x34, 0x8d, 0x9b,
+	0x14, 0x72, 0xa0, 0xa4, 0x07, 0x20, 0x45, 0x8b, 0x38, 0x71, 0xe1, 0xb4, 0x95, 0x6b, 0x30, 0xee,
+	0x45, 0xda, 0x02, 0xc2, 0x9a, 0x1c, 0x51, 0x84, 0xc8, 0x5d, 0x8a, 0xbb, 0x4a, 0xa1, 0x3e, 0x42,
+	0x9f, 0xa0, 0x4f, 0xd1, 0xe7, 0xc8, 0x65, 0x1e, 0xa1, 0x49, 0x5f, 0xa4, 0xd8, 0x5d, 0x92, 0xa2,
+	0x2c, 0x19, 0xe8, 0x95, 0x76, 0x66, 0xbe, 0x6f, 0x38, 0x3b, 0xfb, 0xed, 0xac, 0xa0, 0x1f, 0x84,
+	0x72, 0x3c, 0xbb, 0xe8, 0x79, 0x3c, 0x3e, 0x4c, 0x27, 0x5e, 0xc4, 0x67, 0xbe, 0x37, 0xa6, 0x21,
+	0x3b, 0x4c, 0x27, 0x62, 0xce, 0xbc, 0xc3, 0x24, 0xe5, 0x92, 0x8b, 0xcc, 0xea, 0x69, 0x8b, 0x34,
+	0x8c, 0x73, 0xef, 0x4e, 0xc0, 0x79, 0x10, 0xa1, 0xc1, 0x5c, 0xcc, 0x46, 0x87, 0x18, 0x27, 0x72,
+	0x6e, 0x40, 0x7b, 0x37, 0x02, 0x1e, 0x70, 0xbd, 0x3c, 0x54, 0x2b, 0xe3, 0x75, 0x8e, 0xa0, 0x75,
+	0xcc, 0x5e, 0x63, 0xc4, 0x13, 0x24, 0x36, 0x34, 0x13, 0x3a, 0x8f, 0x38, 0xf5, 0x6d, 0x6b, 0xdf,
+	0x3a, 0xd8, 0x72, 0x73, 0x93, 0xfc, 0x1f, 0xda, 0x22, 0x0c, 0x18, 0x95, 0xb3, 0x14, 0xed, 0x0d,
+	0x1d, 0x5b, 0x38, 0x9c, 0xbf, 0x1a, 0xb0, 0xed, 0x7e, 0xff, 0x72, 0xce, 0xbc, 0x01, 0x0a, 0x41,
+	0x03, 0x24, 0x37, 0xa0, 0xce, 0x38, 0xf3, 0x50, 0xe7, 0xa9, 0xb9, 0xc6, 0x50, 0xf9, 0xbd, 0x31,
+	0x65, 0x0c, 0xa3, 0x2c, 0x47, 0x6e, 0x92, 0x07, 0x50, 0x95, 0x34, 0xb0, 0xab, 0xfb, 0xd6, 0xc1,
+	0x4e, 0xff, 0x7f, 0xa6, 0x34, 0xd1, 0x5b, 0xca, 0xd9, 0x3b, 0xa7, 0x81, 0xab, 0x50, 0xe4, 0x11,
+	0xb4, 0x69, 0x14, 0xbe, 0xc6, 0x61, 0x2c, 0x02, 0xbb, 0xbe, 0x6f, 0x1d, 0x6c, 0xf6, 0x6f, 0xe4,
+	0x94, 0xa7, 0x2a, 0x90, 0x31, 0x4e, 0x2a, 0x6e, 0x4b, 0x03, 0x07, 0x22, 0x20, 0x3d, 0xa8, 0xeb,
+	0x66, 0xd8, 0x0d, 0x4d, 0xb8, 0xd5, 0x33, 0xad, 0xea, 0xe5, 0xad, 0xea, 0x1d, 0xab, 0xe8, 0x49,
+	0xc5, 0x35, 0x30, 0xf2, 0x00, 0x6a, 0x1e, 0x67, 0xcc, 0x6e, 0x6a, 0xf8, 0xcd, 0x3c, 0xff, 0x33,
+	0xce, 0xd8, 0xb1, 0x90, 0xf4, 0x22, 0x0a, 0xc5, 0xf8, 0xa4, 0xe2, 0x6a, 0x90, 0x2a, 0x9f, 0x7a,
+	0x13, 0xbb, 0xa5, 0xb1, 0xb7, 0x8b, 0x5a, 0xbc, 0x09, 0xe3, 0xbf, 0x45, 0xe8, 0x07, 0x18, 0x23,
+	0x93, 0x27, 0x15, 0x57, 0xa1, 0xc8, 0x63, 0x68, 0xc6, 0x18, 0x0f, 0x53, 0x9c, 0xda, 0x6d, 0x4d,
+	0x28, 0xf6, 0x3b, 0xc0, 0xf8, 0x02, 0x53, 0x31, 0x0e, 0x13, 0x17, 0xa7, 0x33, 0x14, 0x8a, 0xd2,
+	0x88, 0x31, 0x76, 0x71, 0x4a, 0x3e, 0xcb, 0x59, 0xc2, 0x06, 0xcd, 0xda, 0x5b, 0xc7, 0x12, 0x09,
+	0x67, 0x02, 0x0b, 0x9a, 0x20, 0xf7, 0xa1, 0x2e, 0x24, 0x95, 0x68, 0x6f, 0x6a, 0x12, 0x29, 0xf6,
+	0xa1, 0x24, 0xf5, 0x52, 0x45, 0xd4, 0x96, 0x35, 0x84, 0x0c, 0x80, 0xe8, 0xc5, 0x30, 0x99, 0x45,
+	0x91, 0xaa, 0x4f, 0x95, 0x60, 0x6f, 0x69, 0xe2, 0x07, 0xab, 0xc4, 0xb3, 0x59, 0x14, 0x2d, 0xea,
+	0xec, 0x88, 0x4b, 0x3e, 0x72, 0x06, 0xd7, 0x97, 0xd2, 0x99, 0xda, 0xec, 0x6d, 0x9d, 0xaf, 0x7b,
+	0x55, 0xbe, 0x62, 0x07, 0xd7, 0xc4, 0x65, 0x27, 0xf9, 0x02, 0xc0, 0x64, 0x0c, 0xd9, 0x88, 0xdb,
+	0x3b, 0xd9, 0x41, 0xae, 0x24, 0x7a, 0xc1, 0x46, 0xfc, 0xa4, 0xe2, 0xb6, 0x45, 0x6e, 0x90, 0x87,
+	0xd0, 0xf2, 0xa9, 0xa4, 0x5a, 0x30, 0xbb, 0x9a, 0x76, 0x3d, 0xa7, 0x3d, 0xa7, 0x92, 0x2e, 0xf4,
+	0xd2, 0x54, 0x30, 0x25, 0x97, 0x9c, 0xa1, 0x4e, 0xa9, 0xb3, 0xca, 0x58, 0xec, 0x5b, 0x33, 0x5c,
+	0x9c, 0x3a, 0x1f, 0x42, 0xf5, 0x9c, 0x06, 0xa4, 0x0d, 0xf5, 0xe3, 0xc1, 0xd9, 0xf9, 0xab, 0x4e,
+	0x85, 0x6c, 0x43, 0xfb, 0xd9, 0xc9, 0xd3, 0xd3, 0xe1, 0x8f, 0xa7, 0x3f, 0xbc, 0xea, 0x58, 0x47,
+	0x6d, 0x68, 0x7a, 0x9c, 0x49, 0x64, 0xd2, 0x39, 0x82, 0xed, 0x25, 0x21, 0x91, 0x9b, 0xd0, 0x48,
+	0x26, 0xe1, 0x30, 0xcc, 0x2f, 0x5e, 0x3d, 0x99, 0x84, 0x2f, 0x7c, 0xb2, 0x07, 0xad, 0xd0, 0x47,
+	0x26, 0x43, 0x39, 0xcf, 0x6e, 0x4c, 0x61, 0x3b, 0x7f, 0x58, 0xb0, 0x55, 0x56, 0x3b, 0xe9, 0x01,
+	0xc4, 0x85, 0x14, 0x74, 0x9e, 0xcd, 0xfe, 0xce, 0xb2, 0x48, 0xdc, 0x12, 0x82, 0xf4, 0xa0, 0x2d,
+	0xc3, 0x18, 0x85, 0xa4, 0x71, 0xa2, 0xb3, 0x6f, 0xf6, 0x3b, 0x39, 0xfc, 0x0c, 0x31, 0x3d, 0x0f,
+	0x63, 0x74, 0x17, 0x90, 0xa5, 0x62, 0xaa, 0x97, 0x8a, 0xf9, 0x0a, 0x5a, 0x39, 0x85, 0xdc, 0x86,
+	0x66, 0xc8, 0xbc, 0x21, 0x9b, 0xc5, 0xd9, 0xed, 0x6f, 0x84, 0xcc, 0x3b, 0x9d, 0xc5, 0x2a, 0x20,
+	0x70, 0xaa, 0x03, 0x1b, 0x26, 0x20, 0x70, 0x7a, 0x3a, 0x8b, 0x9d, 0x27, 0xd0, 0x30, 0xf5, 0xa9,
+	0x6f, 0x20, 0xf3, 0x13, 0x1e, 0x32, 0xa9, 0xc9, 0x6d, 0xb7, 0xb0, 0x4b, 0x3d, 0xda, 0x28, 0xf5,
+	0xc8, 0xb9, 0x07, 0xbb, 0x97, 0x2e, 0x9a, 0x9a, 0x3e, 0x98, 0xa6, 0x3c, 0xcd, 0x52, 0x18, 0xc3,
+	0x19, 0xc1, 0xb5, 0x95, 0x0b, 0x46, 0x9e, 0x40, 0x47, 0x60, 0x34, 0xd2, 0x8a, 0x4a, 0x63, 0x2a,
+	0x43, 0xce, 0xb2, 0xd6, 0x15, 0xbd, 0xc8, 0xc7, 0xa3, 0xbb, 0xab, 0x90, 0x2f, 0x16, 0x40, 0xf5,
+	0x1d, 0xf5, 0x61, 0x66, 0x6f, 0xec, 0x57, 0x55, 0x41, 0xda, 0x70, 0x2e, 0x80, 0xac, 0x5e, 0x49,
+	0xf2, 0x31, 0xd4, 0xf5, 0x2c, 0xb2, 0xad, 0xfd, 0xea, 0xda, 0xec, 0x26, 0x4c, 0x3e, 0x82, 0x9a,
+	0x8f, 0xd4, 0xd7, 0x29, 0xd7, 0xc1, 0x74, 0xd4, 0x49, 0x00, 0x16, 0x7a, 0x2f, 0x37, 0xd6, 0x2a,
+	0x37, 0x96, 0xdc, 0x81, 0xb6, 0x7e, 0x3b, 0x86, 0x31, 0xf5, 0x72, 0x01, 0x69, 0xc7, 0x80, 0x7a,
+	0xe4, 0x53, 0xd5, 0x6b, 0x93, 0x55, 0x9f, 0xe7, 0xba, 0xaf, 0x15, 0x08, 0xe7, 0x57, 0xd8, 0x59,
+	0xbe, 0x61, 0xe4, 0x16, 0x34, 0x22, 0xa4, 0x3e, 0xa6, 0x99, 0x66, 0x33, 0x8b, 0xf4, 0x01, 0x92,
+	0x94, 0x27, 0x98, 0xca, 0x10, 0x45, 0x26, 0xac, 0x62, 0xee, 0x9c, 0x15, 0x11, 0xb7, 0x84, 0x72,
+	0xbe, 0x03, 0x58, 0x44, 0xd4, 0x3b, 0x91, 0xe9, 0x54, 0x77, 0x6b, 0xcb, 0xcd, 0x4d, 0xe2, 0x40,
+	0x7d, 0x14, 0x46, 0x3a, 0xad, 0x6a, 0xcf, 0x56, 0x9e, 0xf6, 0xdb, 0x30, 0x42, 0xd7, 0x84, 0x1c,
+	0x0a, 0x35, 0x65, 0x12, 0x02, 0xb5, 0x84, 0xca, 0x71, 0x26, 0x02, 0xbd, 0x26, 0x77, 0xa1, 0x16,
+	0x73, 0xdf, 0x3c, 0x61, 0x3b, 0xfd, 0x6b, 0x65, 0x7a, 0x6f, 0xc0, 0x7d, 0x74, 0x75, 0xd8, 0xe9,
+	0x42, 0x4d, 0x59, 0x04, 0xa0, 0xf1, 0x34, 0x49, 0x90, 0xf9, 0x9d, 0x8a, 0x5a, 0xbb, 0x94, 0xf9,
+	0x3c, 0xee, 0x58, 0xce, 0x73, 0xb8, 0xb5, 0x7e, 0x6e, 0x91, 0xfb, 0xd0, 0xc4, 0x48, 0xab, 0xf0,
+	0x4a, 0x19, 0xe5, 0x00, 0xe7, 0x31, 0xdc, 0x5c, 0x3b, 0x4d, 0x97, 0x8f, 0xcd, 0x5a, 0x3e, 0x36,
+	0xe7, 0x27, 0xd8, 0x2c, 0xcd, 0x2c, 0x85, 0x55, 0xdb, 0x1e, 0x32, 0x1a, 0x63, 0x7e, 0x65, 0x94,
+	0xe3, 0x94, 0xc6, 0x48, 0x3e, 0x59, 0x3c, 0xe8, 0xe6, 0x1c, 0x76, 0x8b, 0x73, 0x30, 0xee, 0xe2,
+	0x85, 0x77, 0x7e, 0x81, 0x66, 0xe6, 0x53, 0x8d, 0x53, 0x43, 0x2d, 0xfb, 0xb2, 0x5e, 0x93, 0x87,
+	0xd0, 0xa0, 0xba, 0x13, 0x99, 0x54, 0x8a, 0xb1, 0x6b, 0xfa, 0x33, 0x40, 0x49, 0x15, 0x4e, 0xbd,
+	0x3c, 0x06, 0x77, 0x04, 0xd0, 0x8a, 0x33, 0xaf, 0xf3, 0x35, 0xec, 0x2c, 0xe3, 0xd4, 0xd5, 0x11,
+	0x92, 0xa6, 0xa6, 0x4b, 0x55, 0xd7, 0x18, 0x46, 0x52, 0x2c, 0x90, 0x63, 0x5d, 0x6e, 0xd5, 0xcd,
+	0x2c, 0x67, 0x6e, 0xf6, 0x5c, 0xea, 0xcf, 0xd5, 0x7b, 0x5e, 0x3f, 0x26, 0xc8, 0x61, 0xb1, 0x81,
+	0xda, 0xf2, 0x8b, 0x6e, 0x0a, 0x2b, 0x3d, 0xb8, 0x59, 0xfd, 0x75, 0xa8, 0xa6, 0x38, 0x75, 0xee,
+	0xc1, 0xf6, 0x12, 0xa2, 0x54, 0xa3, 0x55, 0xae, 0xb1, 0xff, 0x3b, 0x34, 0xcc, 0xff, 0x15, 0xf2,
+	0x39, 0x80, 0xfa, 0x7d, 0x29, 0x53, 0xa4, 0x31, 0x59, 0x11, 0xc0, 0xde, 0x8a, 0xc7, 0xa9, 0x1c,
+	0x58, 0x0f, 0x2d, 0xf2, 0x25, 0xd4, 0xce, 0x42, 0x16, 0x90, 0x2b, 0xfe, 0x9b, 0xec, 0x5d, 0xe1,
+	0x77, 0x2a, 0x47, 0xdf, 0xbc, 0x79, 0xd7, 0xad, 0xbc, 0x7d, 0xd7, 0xb5, 0xde, 0xbc, 0xef, 0x5a,
+	0x6f, 0xdf, 0x77, 0xad, 0xbf, 0xdf, 0x77, 0xad, 0x3f, 0xff, 0xe9, 0x56, 0x7e, 0xbe, 0xfb, 0x9f,
+	0xfe, 0x4d, 0x5e, 0x98, 0x3f, 0x90, 0x8f, 0xfe, 0x0d, 0x00, 0x00, 0xff, 0xff, 0xf6, 0xb2, 0xa7,
+	0x83, 0x7d, 0x0a, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1357,38 +1763,6 @@ func (m *Envelope) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintRksync(dAtA, i, uint64(len(m.Signature)))
 		i += copy(dAtA[i:], m.Signature)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
-	return i, nil
-}
-
-func (m *Payload) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *Payload) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if m.SeqNum != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintRksync(dAtA, i, uint64(m.SeqNum))
-	}
-	if len(m.Data) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintRksync(dAtA, i, uint64(len(m.Data)))
-		i += copy(dAtA[i:], m.Data)
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -1580,6 +1954,36 @@ func (m *RKSyncMessage_StateInfo) MarshalTo(dAtA []byte) (int, error) {
 	}
 	return i, nil
 }
+func (m *RKSyncMessage_DataMsg) MarshalTo(dAtA []byte) (int, error) {
+	i := 0
+	if m.DataMsg != nil {
+		dAtA[i] = 0x7a
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(m.DataMsg.Size()))
+		n12, err := m.DataMsg.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n12
+	}
+	return i, nil
+}
+func (m *RKSyncMessage_DataReq) MarshalTo(dAtA []byte) (int, error) {
+	i := 0
+	if m.DataReq != nil {
+		dAtA[i] = 0x82
+		i++
+		dAtA[i] = 0x1
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(m.DataReq.Size()))
+		n13, err := m.DataReq.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n13
+	}
+	return i, nil
+}
 func (m *ConnEstablish) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -1632,21 +2036,21 @@ func (m *AliveMessage) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintRksync(dAtA, i, uint64(m.Membership.Size()))
-		n12, err := m.Membership.MarshalTo(dAtA[i:])
+		n14, err := m.Membership.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n12
+		i += n14
 	}
 	if m.Timestamp != nil {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintRksync(dAtA, i, uint64(m.Timestamp.Size()))
-		n13, err := m.Timestamp.MarshalTo(dAtA[i:])
+		n15, err := m.Timestamp.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n13
+		i += n15
 	}
 	if len(m.Identity) > 0 {
 		dAtA[i] = 0x1a
@@ -1770,11 +2174,11 @@ func (m *MembershipRequest) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintRksync(dAtA, i, uint64(m.SelfInformation.Size()))
-		n14, err := m.SelfInformation.MarshalTo(dAtA[i:])
+		n16, err := m.SelfInformation.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n14
+		i += n16
 	}
 	if len(m.Known) > 0 {
 		for _, b := range m.Known {
@@ -1865,11 +2269,11 @@ func (m *ChainState) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x1a
 		i++
 		i = encodeVarintRksync(dAtA, i, uint64(m.Envelope.Size()))
-		n15, err := m.Envelope.MarshalTo(dAtA[i:])
+		n17, err := m.Envelope.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n15
+		i += n17
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -1902,11 +2306,11 @@ func (m *ChainStateInfo) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintRksync(dAtA, i, uint64(m.Properties.Size()))
-		n16, err := m.Properties.MarshalTo(dAtA[i:])
+		n18, err := m.Properties.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n16
+		i += n18
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -2006,11 +2410,11 @@ func (m *ChainStatePullResponse) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintRksync(dAtA, i, uint64(m.Element.Size()))
-		n17, err := m.Element.MarshalTo(dAtA[i:])
+		n19, err := m.Element.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n17
+		i += n19
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -2045,6 +2449,202 @@ func (m *ChainStatePullRequest) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
+func (m *DataMessage) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *DataMessage) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.FileName) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(len(m.FileName)))
+		i += copy(dAtA[i:], m.FileName)
+	}
+	if m.Payload != nil {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(m.Payload.Size()))
+		n20, err := m.Payload.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n20
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *Payload) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Payload) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Data) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(len(m.Data)))
+		i += copy(dAtA[i:], m.Data)
+	}
+	if m.Metadata != nil {
+		nn21, err := m.Metadata.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += nn21
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *Payload_Append) MarshalTo(dAtA []byte) (int, error) {
+	i := 0
+	if m.Append != nil {
+		dAtA[i] = 0x1a
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(m.Append.Size()))
+		n22, err := m.Append.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n22
+	}
+	return i, nil
+}
+func (m *AppendMetadata) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *AppendMetadata) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Start != 0 {
+		dAtA[i] = 0x8
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(m.Start))
+	}
+	if m.Length != 0 {
+		dAtA[i] = 0x10
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(m.Length))
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *DataRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *DataRequest) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.FileName) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(len(m.FileName)))
+		i += copy(dAtA[i:], m.FileName)
+	}
+	if len(m.PkiId) > 0 {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(len(m.PkiId)))
+		i += copy(dAtA[i:], m.PkiId)
+	}
+	if m.Req != nil {
+		nn23, err := m.Req.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += nn23
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *DataRequest_Append) MarshalTo(dAtA []byte) (int, error) {
+	i := 0
+	if m.Append != nil {
+		dAtA[i] = 0x22
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(m.Append.Size()))
+		n24, err := m.Append.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n24
+	}
+	return i, nil
+}
+func (m *AppendRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *AppendRequest) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Length != 0 {
+		dAtA[i] = 0x8
+		i++
+		i = encodeVarintRksync(dAtA, i, uint64(m.Length))
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
 func encodeVarintRksync(dAtA []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
@@ -2065,25 +2665,6 @@ func (m *Envelope) Size() (n int) {
 		n += 1 + l + sovRksync(uint64(l))
 	}
 	l = len(m.Signature)
-	if l > 0 {
-		n += 1 + l + sovRksync(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
-	return n
-}
-
-func (m *Payload) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	if m.SeqNum != 0 {
-		n += 1 + sovRksync(uint64(m.SeqNum))
-	}
-	l = len(m.Data)
 	if l > 0 {
 		n += 1 + l + sovRksync(uint64(l))
 	}
@@ -2235,6 +2816,30 @@ func (m *RKSyncMessage_StateInfo) Size() (n int) {
 	if m.StateInfo != nil {
 		l = m.StateInfo.Size()
 		n += 1 + l + sovRksync(uint64(l))
+	}
+	return n
+}
+func (m *RKSyncMessage_DataMsg) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.DataMsg != nil {
+		l = m.DataMsg.Size()
+		n += 1 + l + sovRksync(uint64(l))
+	}
+	return n
+}
+func (m *RKSyncMessage_DataReq) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.DataReq != nil {
+		l = m.DataReq.Size()
+		n += 2 + l + sovRksync(uint64(l))
 	}
 	return n
 }
@@ -2500,6 +3105,125 @@ func (m *ChainStatePullRequest) Size() (n int) {
 	return n
 }
 
+func (m *DataMessage) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.FileName)
+	if l > 0 {
+		n += 1 + l + sovRksync(uint64(l))
+	}
+	if m.Payload != nil {
+		l = m.Payload.Size()
+		n += 1 + l + sovRksync(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Payload) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Data)
+	if l > 0 {
+		n += 1 + l + sovRksync(uint64(l))
+	}
+	if m.Metadata != nil {
+		n += m.Metadata.Size()
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Payload_Append) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Append != nil {
+		l = m.Append.Size()
+		n += 1 + l + sovRksync(uint64(l))
+	}
+	return n
+}
+func (m *AppendMetadata) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Start != 0 {
+		n += 1 + sovRksync(uint64(m.Start))
+	}
+	if m.Length != 0 {
+		n += 1 + sovRksync(uint64(m.Length))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *DataRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.FileName)
+	if l > 0 {
+		n += 1 + l + sovRksync(uint64(l))
+	}
+	l = len(m.PkiId)
+	if l > 0 {
+		n += 1 + l + sovRksync(uint64(l))
+	}
+	if m.Req != nil {
+		n += m.Req.Size()
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *DataRequest_Append) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Append != nil {
+		l = m.Append.Size()
+		n += 1 + l + sovRksync(uint64(l))
+	}
+	return n
+}
+func (m *AppendRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Length != 0 {
+		n += 1 + sovRksync(uint64(m.Length))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
 func sovRksync(x uint64) (n int) {
 	for {
 		n++
@@ -2608,113 +3332,6 @@ func (m *Envelope) Unmarshal(dAtA []byte) error {
 			m.Signature = append(m.Signature[:0], dAtA[iNdEx:postIndex]...)
 			if m.Signature == nil {
 				m.Signature = []byte{}
-			}
-			iNdEx = postIndex
-		default:
-			iNdEx = preIndex
-			skippy, err := skipRksync(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthRksync
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthRksync
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *Payload) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowRksync
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: Payload: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: Payload: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SeqNum", wireType)
-			}
-			m.SeqNum = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowRksync
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.SeqNum |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowRksync
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthRksync
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex < 0 {
-				return ErrInvalidLengthRksync
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
-			if m.Data == nil {
-				m.Data = []byte{}
 			}
 			iNdEx = postIndex
 		default:
@@ -3192,6 +3809,76 @@ func (m *RKSyncMessage) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			m.Content = &RKSyncMessage_StateInfo{v}
+			iNdEx = postIndex
+		case 15:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DataMsg", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthRksync
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &DataMessage{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Content = &RKSyncMessage_DataMsg{v}
+			iNdEx = postIndex
+		case 16:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DataReq", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthRksync
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &DataRequest{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Content = &RKSyncMessage_DataReq{v}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -4687,6 +5374,571 @@ func (m *ChainStatePullRequest) Unmarshal(dAtA []byte) error {
 				m.ChainMac = []byte{}
 			}
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRksync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DataMessage) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRksync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DataMessage: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DataMessage: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field FileName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthRksync
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.FileName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Payload", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthRksync
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Payload == nil {
+				m.Payload = &Payload{}
+			}
+			if err := m.Payload.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRksync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Payload) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRksync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Payload: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Payload: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRksync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
+			if m.Data == nil {
+				m.Data = []byte{}
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Append", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthRksync
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &AppendMetadata{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Metadata = &Payload_Append{v}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRksync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *AppendMetadata) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRksync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AppendMetadata: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AppendMetadata: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Start", wireType)
+			}
+			m.Start = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Start |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Length", wireType)
+			}
+			m.Length = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Length |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRksync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DataRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRksync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DataRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DataRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field FileName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthRksync
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.FileName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PkiId", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				byteLen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRksync
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PkiId = append(m.PkiId[:0], dAtA[iNdEx:postIndex]...)
+			if m.PkiId == nil {
+				m.PkiId = []byte{}
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Append", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthRksync
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			v := &AppendRequest{}
+			if err := v.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			m.Req = &DataRequest_Append{v}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRksync(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthRksync
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *AppendRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRksync
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: AppendRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: AppendRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Length", wireType)
+			}
+			m.Length = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRksync
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Length |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipRksync(dAtA[iNdEx:])

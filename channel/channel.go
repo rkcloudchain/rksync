@@ -47,6 +47,7 @@ type Adapter interface {
 	Send(message *protos.SignedRKSyncMessage, peers ...*common.NetworkMember)
 	GetMembership() []common.NetworkMember
 	Lookup(pkiID common.PKIidType) *common.NetworkMember
+	DeMultiplex(interface{})
 }
 
 // GenerateMAC returns a byte slice that is derived from the peer's PKI-ID

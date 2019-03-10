@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/pem"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,6 +40,7 @@ func NewGossipService(gConf *config.GossipConfig, idConf *config.IdentityConfig,
 		toDieChan:             make(chan struct{}, 1),
 		stopFlag:              int32(0),
 		includeIdentityPeriod: time.Now().Add(gConf.PublishCertPeriod),
+		ChannelDeMultiplexer:  rpc.NewChannelDemultiplexer(),
 	}
 	g.chainStateMsgStore = g.newChainStateMsgStore()
 
@@ -83,6 +85,41 @@ type gossipService struct {
 	discAdapter           *discoveryAdapter
 	chanState             *channelState
 	chainStateMsgStore    lib.MessageStore
+	*rpc.ChannelDeMultiplexer
+}
+
+func (g *gossipService) Accept(acceptor common.MessageAcceptor, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage) {
+	if passThrough {
+		return nil, g.srv.Accept(acceptor)
+	}
+	acceptByType := func(o interface{}) bool {
+		if o, isRKSyncMsg := o.(*protos.RKSyncMessage); isRKSyncMsg {
+			return acceptor(o)
+		}
+		if o, isSignedMsg := o.(*protos.SignedRKSyncMessage); isSignedMsg {
+			return acceptor(o.RKSyncMessage)
+		}
+		logging.Warning("Message type: ", reflect.TypeOf(o), "cannot be evaluated")
+		return false
+	}
+
+	inCh := g.AddChannel(acceptByType)
+	outCh := make(chan *protos.RKSyncMessage, acceptChanSize)
+	go func() {
+		for {
+			select {
+			case s := <-g.toDieChan:
+				g.toDieChan <- s
+				return
+			case m := <-inCh:
+				if m == nil {
+					return
+				}
+				outCh <- m.(*protos.SignedRKSyncMessage).RKSyncMessage
+			}
+		}
+	}()
+	return outCh, nil
 }
 
 func (g *gossipService) AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error) {
@@ -147,6 +184,7 @@ func (g *gossipService) Stop() {
 	g.disc.Stop()
 	g.toDieChan <- struct{}{}
 	g.emitter.Stop()
+	g.ChannelDeMultiplexer.Close()
 	g.stopSignal.Wait()
 	g.srv.Stop()
 }

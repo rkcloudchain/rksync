@@ -2,6 +2,7 @@ package config
 
 import (
 	"crypto/tls"
+	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -137,4 +138,18 @@ func ClientKeepaliveOptions(ka *KeepaliveConfig) []grpc.DialOption {
 	}
 	dialOpts = append(dialOpts, grpc.WithKeepaliveParams(kap))
 	return dialOpts
+}
+
+// FileSystem enables the rksync to communicate with file system.
+type FileSystem interface {
+	// ReadAt reads len(p) bytes into p starting at offset off in the
+	// underlying input source. It returns the number of bytes
+	// read (0 <= n <= len(p)) and any error encountered.
+	ReaderAt(filename string, p []byte, offset int64) (int, error)
+
+	// Append appends the data to the named file.
+	Append(filename string, p []byte) (int, error)
+
+	// Stat returns a FileInfo describing the named file.
+	Stat(filename string) (os.FileInfo, error)
 }
