@@ -36,6 +36,7 @@ func NewGossipService(gConf *config.GossipConfig, idConf *config.IdentityConfig,
 	g := &gossipService{
 		selfIdentity:          selfIdentity,
 		conf:                  gConf,
+		id:                    idConf.ID,
 		presumedDead:          make(chan common.PKIidType, presumedDeadChanSize),
 		toDieChan:             make(chan struct{}, 1),
 		stopFlag:              int32(0),
@@ -70,6 +71,7 @@ func NewGossipService(gConf *config.GossipConfig, idConf *config.IdentityConfig,
 }
 
 type gossipService struct {
+	id                    string
 	selfIdentity          common.PeerIdentityType
 	selfPKIid             common.PKIidType
 	includeIdentityPeriod time.Time
@@ -264,7 +266,7 @@ func (g *gossipService) start() {
 
 	go g.acceptMessages(incMsgs)
 
-	logging.Info("RKSync gossip instance", g.conf.ID, "started")
+	logging.Info("RKSync gossip instance", g.id, "started")
 }
 
 func (g *gossipService) acceptMessages(incMsgs <-chan protos.ReceivedMessage) {

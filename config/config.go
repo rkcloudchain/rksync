@@ -46,7 +46,6 @@ type Config struct {
 
 // GossipConfig is the configuration of the rksync component
 type GossipConfig struct {
-	ID                         string        // ID of this instance
 	BootstrapPeers             []string      // Peers we connect to at startup
 	PropagateIterations        int           // Number of times a message is pushed to remote peer
 	PropagatePeerNum           int           // Number of peers selected to push message to
@@ -62,6 +61,7 @@ type GossipConfig struct {
 
 // IdentityConfig defines the identity parameters for peer
 type IdentityConfig struct {
+	ID          string // ID of this instance
 	Certificate string
 	Key         string
 	CAs         []string

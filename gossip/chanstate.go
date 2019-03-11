@@ -120,7 +120,6 @@ type gossipAdapterImpl struct {
 
 func (ga *gossipAdapterImpl) GetChannelConfig() channel.Config {
 	return channel.Config{
-		ID:                          ga.conf.ID,
 		PublishStateInfoInterval:    ga.conf.PublishStateInfoInterval,
 		PullPeerNum:                 ga.conf.PullPeerNum,
 		PullInterval:                ga.conf.PullInterval,

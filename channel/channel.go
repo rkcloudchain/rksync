@@ -10,7 +10,6 @@ import (
 
 // Config is a configuration item of the channel
 type Config struct {
-	ID                          string
 	PublishStateInfoInterval    time.Duration
 	PullPeerNum                 int
 	PullInterval                time.Duration

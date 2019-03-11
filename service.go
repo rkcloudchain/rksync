@@ -209,7 +209,7 @@ func secureDialOpts(cfg *config.Config) []grpc.DialOption {
 }
 
 func serializeIdentity(cfg *config.Config) (common.PeerIdentityType, error) {
-	if cfg.Gossip.ID == "" {
+	if cfg.Identity.ID == "" {
 		return nil, errors.New("Node id must be provided")
 	}
 	if cfg.Identity.Certificate == "" || cfg.Identity.Key == "" {
@@ -232,7 +232,7 @@ func serializeIdentity(cfg *config.Config) (common.PeerIdentityType, error) {
 		return nil, errors.New("Encoding of identity failed")
 	}
 
-	sID := &protos.SerializedIdentity{NodeId: cfg.Gossip.ID, IdBytes: pemBytes}
+	sID := &protos.SerializedIdentity{NodeId: cfg.Identity.ID, IdBytes: pemBytes}
 	idBytes, err := proto.Marshal(sID)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not marshal a SerializedIdentity structure for identity %v", sID)
