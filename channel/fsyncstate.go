@@ -80,7 +80,7 @@ type fsyncAdapterImpl struct {
 }
 
 func (fa *fsyncAdapterImpl) GetFileSystem() config.FileSystem {
-	return nil
+	return fa.gossipChannel.fs
 }
 
 func (fa *fsyncAdapterImpl) SendToPeer(message *protos.SignedRKSyncMessage, peer *common.NetworkMember) {

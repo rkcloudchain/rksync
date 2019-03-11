@@ -4,12 +4,14 @@ import (
 	"time"
 
 	"github.com/rkcloudchain/rksync/common"
+	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/protos"
 	"github.com/rkcloudchain/rksync/util"
 )
 
 // Config is a configuration item of the channel
 type Config struct {
+	FileSystem                  config.FileSystem
 	PublishStateInfoInterval    time.Duration
 	PullPeerNum                 int
 	PullInterval                time.Duration

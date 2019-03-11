@@ -14,6 +14,9 @@ func validateGossipConfig(cfg *config.Config) error {
 	if cfg.Gossip.Endpoint == "" {
 		return errors.New("Must specify the endpoint address of the peer")
 	}
+	if cfg.Gossip.FileSystem == nil {
+		return errors.New("Must specify the FileSystem interface")
+	}
 	if cfg.Gossip.PropagateIterations == 0 {
 		cfg.Gossip.PropagateIterations = 1
 	}

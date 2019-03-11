@@ -46,6 +46,7 @@ type Config struct {
 
 // GossipConfig is the configuration of the rksync component
 type GossipConfig struct {
+	FileSystem                 FileSystem    // File system
 	BootstrapPeers             []string      // Peers we connect to at startup
 	PropagateIterations        int           // Number of times a message is pushed to remote peer
 	PropagatePeerNum           int           // Number of peers selected to push message to

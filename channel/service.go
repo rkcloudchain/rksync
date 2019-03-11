@@ -8,6 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/common"
+	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/filter"
 	"github.com/rkcloudchain/rksync/identity"
 	"github.com/rkcloudchain/rksync/logging"
@@ -17,6 +18,7 @@ import (
 type gossipChannel struct {
 	Adapter
 	sync.RWMutex
+	fs                        config.FileSystem
 	shouldGossipStateInfo     int32
 	pkiID                     common.PKIidType
 	leader                    bool
@@ -37,6 +39,7 @@ func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapt
 		pkiID:                     pkiID,
 		Adapter:                   adapter,
 		leader:                    leader,
+		fs:                        adapter.GetChannelConfig().FileSystem,
 		chainID:                   chainID,
 		shouldGossipStateInfo:     int32(0),
 		idMapper:                  idMapper,
