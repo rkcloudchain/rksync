@@ -311,6 +311,12 @@ func (m *RKSyncMessage) IsTagLegal() error {
 		}
 		return nil
 	}
+	if m.IsDataMsg() || m.IsDataReq() || m.IsChainStateMsg() || m.IsStatePullRequestMsg() || m.IsStatePullResponseMsg() {
+		if m.Tag != RKSyncMessage_CHAN_ONLY {
+			return fmt.Errorf("Tag should be %s", RKSyncMessage_Tag_name[int32(RKSyncMessage_CHAN_ONLY)])
+		}
+		return nil
+	}
 
 	return fmt.Errorf("Unknown message type: %v", m)
 }

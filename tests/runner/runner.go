@@ -4,6 +4,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"io/ioutil"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/rkcloudchain/rksync/common"
@@ -105,4 +106,28 @@ func CreateRPCServerWithIdentity(address string, selfIdentity common.PeerIdentit
 	})
 
 	return rpcSrv, srv, nil
+}
+
+// CreateGRPCServer creates a new grpc server
+func CreateGRPCServer(address string) (*server.GRPCServer, error) {
+	return rkserver.NewGRPCServer(address, &config.ServerConfig{
+		SecOpts: &config.TLSConfig{UseTLS: false},
+	})
+}
+
+// DefaultGossipConfig returns a default gossip configuration
+func DefaultGossipConfig(endpoint string) *config.GossipConfig {
+	return &config.GossipConfig{
+		BootstrapPeers:             []string{"localhost:9053"},
+		Endpoint:                   endpoint,
+		PropagateIterations:        1,
+		PropagatePeerNum:           3,
+		MaxPropagationBurstSize:    10,
+		MaxPropagationBurstLatency: 10 * time.Millisecond,
+		PullInterval:               4 * time.Second,
+		PullPeerNum:                3,
+		PublishCertPeriod:          20 * time.Second,
+		PublishStateInfoInterval:   4 * time.Second,
+		RequestStateInfoInterval:   4 * time.Second,
+	}
 }
