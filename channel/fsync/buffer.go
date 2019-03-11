@@ -78,18 +78,8 @@ func (b *payloadBufferImpl) Expire(delta int64) {
 	defer b.mutex.Unlock()
 
 	atomic.AddInt64(&b.next, delta)
-	hasMessageExpired := func(payload *protos.Payload) bool {
-		if payload.IsAppend() {
-			if payload.GetAppend().Start < atomic.LoadInt64(&b.next) {
-				return true
-			}
-		}
-		return false
-	}
 
-	if b.isPurgeNeeded(hasMessageExpired) {
-		b.expireMessage()
-	}
+	b.expireMessage()
 	b.drainReadChannel()
 }
 
@@ -124,15 +114,6 @@ func (b *payloadBufferImpl) Size() int {
 
 func (b *payloadBufferImpl) Close() {
 	close(b.readyChan)
-}
-
-func (b *payloadBufferImpl) isPurgeNeeded(shouldBePurged func(*protos.Payload) bool) bool {
-	for _, m := range b.buf {
-		if shouldBePurged(m) {
-			return true
-		}
-	}
-	return false
 }
 
 func (b *payloadBufferImpl) expireMessage() {
