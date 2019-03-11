@@ -24,6 +24,7 @@ type gossipChannel struct {
 	idMapper                  identity.Identity
 	chainID                   string
 	members                   map[string]common.PKIidType
+	fileState                 *fsyncState
 	stateInfoPublishScheduler *time.Ticker
 	stateInfoRequestScheduler *time.Ticker
 	stopChan                  chan struct{}
@@ -44,6 +45,7 @@ func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapt
 		stateInfoRequestScheduler: time.NewTicker(adapter.GetChannelConfig().RequestStateInfoInterval),
 		members:                   make(map[string]common.PKIidType),
 	}
+	gc.fileState = newFSyncState(gc)
 
 	go gc.periodicalInvocation(gc.publishStateInfo, gc.stateInfoPublishScheduler.C)
 	if !gc.leader {
@@ -104,8 +106,19 @@ func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.F
 		ChainMac: GenerateMAC(gc.pkiID, gc.chainID),
 		Envelope: envp,
 	}
-
 	gc.chainStateMsg = chainState
+
+	for _, file := range files {
+		filemode, exists := protos.File_Mode_value[file.Mode]
+		if !exists {
+			return nil, errors.Errorf("Unknown file mode %s", file.Mode)
+		}
+		err := gc.fileState.createProvider(file.Path, protos.File_Mode(filemode), true)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed creating file sync provider")
+		}
+	}
+
 	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(1))
 	return chainState, nil
 }
@@ -143,6 +156,10 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 }
 
 func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, error) {
+	if gc.fileState.lookupFSyncProviderByFilename(file.Path) != nil {
+		return nil, errors.Errorf("File %s has already exists ", file.Path)
+	}
+
 	gc.Lock()
 	defer gc.Unlock()
 
@@ -173,8 +190,9 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 	if err != nil {
 		return nil, err
 	}
-
 	gc.chainStateMsg.Envelope = envp
+
+	gc.fileState.createProvider(file.Path, protos.File_Mode(mode), true)
 	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(0))
 	return gc.chainStateMsg, nil
 }
@@ -219,6 +237,26 @@ func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 		if err == nil {
 			gc.Forward(msg)
 		}
+	}
+
+	if m.IsDataMsg() || m.IsDataReq() {
+		if m.IsDataMsg() {
+			if m.GetDataMsg().Payload == nil {
+				logging.Warningf("Payload is empty, got it from %s", msg.GetConnectionInfo().ID)
+				return
+			}
+		}
+
+		verifier := func(peerIdentity []byte, signature, message []byte) error {
+			return gc.idMapper.Verify(peerIdentity, signature, message)
+		}
+		err := m.Verify(msg.GetConnectionInfo().ID, verifier)
+		if err != nil {
+			logging.Errorf("Failed verifying message signature: %s, got it from %s", err, msg.GetConnectionInfo().ID)
+			return
+		}
+
+		gc.DeMultiplex(m)
 	}
 }
 
@@ -312,6 +350,13 @@ func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.
 	gc.members = make(map[string]common.PKIidType)
 	for _, member := range csi.Properties.Members {
 		gc.members[string(member)] = member
+	}
+
+	for _, file := range csi.Properties.Files {
+		err := gc.fileState.createProvider(file.Path, file.Mode, false)
+		if err != nil {
+			return errors.Wrapf(err, "Failed creating file sync provider for %s", file.Path)
+		}
 	}
 
 	return nil
