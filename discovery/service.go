@@ -3,7 +3,6 @@ package discovery
 import (
 	"bytes"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -320,8 +319,10 @@ func (d *gossipDiscoveryService) aliveMsg() *protos.RKSyncMessage {
 }
 
 func (d *gossipDiscoveryService) isMyOwnEndpoint(endpoint string) bool {
-	return strings.Contains(endpoint, "127.0.0.1") || strings.Contains(endpoint, "localhost") ||
-		endpoint == d.self.Endpoint
+	// return strings.Contains(endpoint, "127.0.0.1") || strings.Contains(endpoint, "localhost") ||
+	// 	endpoint == d.self.Endpoint
+
+	return endpoint == d.self.Endpoint
 }
 
 func (d *gossipDiscoveryService) toDie() bool {

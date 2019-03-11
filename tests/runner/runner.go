@@ -90,3 +90,19 @@ func CreateRPCServer(address string, cfg *config.IdentityConfig) (*rpc.Server, *
 
 	return rpcSrv, srv, nil
 }
+
+// CreateRPCServerWithIdentity creates rpc server
+func CreateRPCServerWithIdentity(address string, selfIdentity common.PeerIdentityType, idMapper identity.Identity) (*rpc.Server, *server.GRPCServer, error) {
+	srv, err := rkserver.NewGRPCServer(address, &config.ServerConfig{
+		SecOpts: &config.TLSConfig{UseTLS: false},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rpcSrv := rpc.NewServer(srv.Server(), idMapper, selfIdentity, func() []grpc.DialOption {
+		return []grpc.DialOption{grpc.WithInsecure()}
+	})
+
+	return rpcSrv, srv, nil
+}
