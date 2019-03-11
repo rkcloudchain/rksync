@@ -274,6 +274,7 @@ func (gc *gossipChannel) IsMemberInChan(member common.NetworkMember) bool {
 
 func (gc *gossipChannel) Stop() {
 	gc.stopChan <- struct{}{}
+	gc.fileState.stop()
 	gc.stateInfoPublishScheduler.Stop()
 	gc.stateInfoRequestScheduler.Stop()
 }
