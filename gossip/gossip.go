@@ -13,6 +13,12 @@ type channelRoutingFilterFactory func(channel.Channel) filter.RoutingFilter
 
 // Gossip is the interface of the gossip component
 type Gossip interface {
+	// SelfPKIid returns the peer's PKI-ID
+	SelfPKIid() common.PKIidType
+
+	// SelfChannelInfo returns the peer's latest ChainState message of a given channel
+	SelfChannelInfo(chainID string) *protos.ChainState
+
 	// AddMemberToChan adds memeber to channel
 	AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error)
 
@@ -27,6 +33,9 @@ type Gossip interface {
 
 	// CloseChannel closes a channel
 	CloseChannel(chainID string)
+
+	// GetPeers returns the NetworkMembers considered alive
+	Peers() []common.NetworkMember
 
 	// Accept returns a dedicated read-only channel for messages sent by other nodes that match a certain predicate.
 	Accept(acceptor common.MessageAcceptor, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage)

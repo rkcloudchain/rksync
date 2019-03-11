@@ -19,6 +19,8 @@ type Config struct {
 
 // Channel defines an object that deals with all channel-related message
 type Channel interface {
+	Self() *protos.ChainState
+
 	// IsMemberInChan checks whether the given member is eligible to be in the channel
 	IsMemberInChan(member common.NetworkMember) bool
 

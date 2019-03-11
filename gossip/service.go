@@ -90,6 +90,22 @@ type gossipService struct {
 	*rpc.ChannelDeMultiplexer
 }
 
+func (g *gossipService) SelfChannelInfo(chainID string) *protos.ChainState {
+	ch := g.chanState.getChannelByChainID(chainID)
+	if ch == nil {
+		return nil
+	}
+	return ch.Self()
+}
+
+func (g *gossipService) SelfPKIid() common.PKIidType {
+	return g.selfPKIid
+}
+
+func (g *gossipService) Peers() []common.NetworkMember {
+	return g.disc.GetMembership()
+}
+
 func (g *gossipService) Accept(acceptor common.MessageAcceptor, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage) {
 	if passThrough {
 		return nil, g.srv.Accept(acceptor)

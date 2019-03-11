@@ -55,6 +55,12 @@ func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapt
 	return gc
 }
 
+func (gc *gossipChannel) Self() *protos.ChainState {
+	gc.RLock()
+	defer gc.RUnlock()
+	return gc.chainStateMsg
+}
+
 func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.FileSyncInfo) (*protos.ChainState, error) {
 	gc.Lock()
 	defer gc.Unlock()
