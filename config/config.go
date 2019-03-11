@@ -2,6 +2,7 @@ package config
 
 import (
 	"crypto/tls"
+	"io"
 	"os"
 	"time"
 
@@ -143,14 +144,19 @@ func ClientKeepaliveOptions(ka *KeepaliveConfig) []grpc.DialOption {
 
 // FileSystem enables the rksync to communicate with file system.
 type FileSystem interface {
-	// ReadAt reads len(p) bytes into p starting at offset off in the
-	// underlying input source. It returns the number of bytes
-	// read (0 <= n <= len(p)) and any error encountered.
-	ReaderAt(filename string, p []byte, offset int64) (int, error)
+	// Create creates the named file
+	Create(chainID, filename string) (File, error)
 
-	// Append appends the data to the named file.
-	Append(filename string, p []byte) (int, error)
+	// OpenFile opens a file using the given flags and the given mode.
+	OpenFile(chainID, filename string, flag int, perm os.FileMode) (File, error)
 
 	// Stat returns a FileInfo describing the named file.
-	Stat(filename string) (os.FileInfo, error)
+	Stat(chainID, filename string) (os.FileInfo, error)
+}
+
+// File represents a file in the filesystem
+type File interface {
+	io.Closer
+	io.ReaderAt
+	io.Writer
 }

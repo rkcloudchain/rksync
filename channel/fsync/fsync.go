@@ -3,6 +3,7 @@ package fsync
 import (
 	"bytes"
 	"io"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,17 +47,6 @@ func NewFileSyncProvider(chainID, filename string, mode protos.File_Mode, leader
 			bytes.Equal([]byte(message.(*protos.RKSyncMessage).GetDataReq().FileName), []byte(filename))
 	}, false)
 
-	var b PayloadBuffer
-	if mode == protos.File_Append {
-		fi, err := adapter.GetFileSystem().Stat(filename)
-		if err != nil {
-			return nil, errors.Errorf("Failed stating file %s: %s", filename, err)
-		}
-		b = NewPayloadBuffer(fi.Size())
-	} else {
-		return nil, errors.Errorf("Unsupported file mode: %s", protos.File_Mode_name[int32(mode)])
-	}
-
 	p := &FileSyncProvier{
 		Adapter:  adapter,
 		chainID:  chainID,
@@ -64,12 +54,16 @@ func NewFileSyncProvider(chainID, filename string, mode protos.File_Mode, leader
 		mode:     mode,
 		leader:   leader,
 		state:    int32(0),
-		payloads: b,
 		reqChan:  reqChan,
 		msgChan:  msgChan,
 		stopCh:   make(chan struct{}, 1),
 		pkiID:    pkiID,
 	}
+	start, err := p.initPayloadBufferStart()
+	if err != nil {
+		return nil, err
+	}
+	p.payloads = NewPayloadBuffer(start)
 
 	if !leader {
 		p.done.Add(3)
@@ -99,6 +93,27 @@ type FileSyncProvier struct {
 	done     sync.WaitGroup
 	stopCh   chan struct{}
 	once     sync.Once
+}
+
+func (p *FileSyncProvier) initPayloadBufferStart() (int64, error) {
+	fs := p.GetFileSystem()
+	fi, err := fs.Stat(p.chainID, p.filename)
+	if err == nil {
+		return fi.Size(), nil
+	}
+
+	if os.IsNotExist(err) {
+		logging.Debugf("Channel %s file %s does not exists, create it", p.chainID, p.filename)
+		f, err := fs.Create(p.chainID, p.filename)
+		if err != nil {
+			logging.Errorf("Failed creating file %s (Channel %s): %s", p.filename, p.chainID, err)
+			return 0, err
+		}
+		f.Close()
+		return 0, nil
+	}
+
+	return 0, errors.Errorf("Failed stating file %s (Channel %s): %s", p.filename, p.chainID, err)
 }
 
 // Stop stops the FileSyncProvider
@@ -160,18 +175,25 @@ func (p *FileSyncProvier) processDataReq() {
 
 func (p *FileSyncProvier) processPayloads() {
 	logging.Debugf("[%s] Ready to process payloads, next payload start number is = [%d]", p.filename, p.payloads.Next())
-	for payload := p.payloads.Pop(); payload != nil; payload = p.payloads.Pop() {
-		if payload.IsAppend() {
-			n, err := p.GetFileSystem().Append(p.filename, payload.Data)
-			if err != nil {
-				logging.Fatalf("Failed appending data to file %s: %s", p.filename, err)
-				return
-			}
+	fs := p.GetFileSystem()
+	f, err := fs.OpenFile(p.chainID, p.filename, os.O_WRONLY|os.O_APPEND, os.ModePerm)
+	if err != nil {
+		logging.Errorf("Failed opening file %s (Channel %): %s", p.filename, p.chainID, err)
+		return
+	}
+	defer f.Close()
 
-			if int64(n) != payload.GetAppend().Length {
-				logging.Fatalf("Failed to write to file, actually writes %d bytes, expects to write %d bytes", n, payload.GetAppend().Length)
+	for payload := p.payloads.Peek(); payload != nil; payload = p.payloads.Peek() {
+		if payload.IsAppend() {
+			n, err := f.Write(payload.Data)
+			if err != nil {
+				logging.Errorf("Failed appending data to file %s: %s", p.filename, err)
+				if n > 0 {
+					p.payloads.Reset(int64(n))
+				}
 				return
 			}
+			p.payloads.Expire(int64(n))
 		}
 	}
 }
@@ -231,7 +253,7 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 		}
 
 		appendReq := req.GetAppend()
-		fi, err := p.GetFileSystem().Stat(p.filename)
+		fi, err := p.GetFileSystem().Stat(p.chainID, p.filename)
 		if err != nil {
 			logging.Warningf("Failed to stat file %s: %s", p.filename, err)
 			return
@@ -246,8 +268,16 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 		start := appendReq.Length
 		var n int
 
+		fs := p.GetFileSystem()
+		f, err := fs.OpenFile(p.chainID, p.filename, os.O_RDONLY, os.ModePerm)
+		if err != nil {
+			logging.Errorf("Failed opening file %s (Channel %s): %s", p.filename, p.chainID, err)
+			return
+		}
+		defer f.Close()
+
 		for {
-			n, err = p.GetFileSystem().ReaderAt(p.filename, data, start)
+			n, err = f.ReadAt(data, start)
 			if err != nil {
 				if err != io.EOF {
 					logging.Warningf("Read file %s failed: %s", p.filename, err)
@@ -318,7 +348,7 @@ func (p *FileSyncProvier) requestDataAppend() {
 }
 
 func (p *FileSyncProvier) createDataAppendMsgRequest() (*protos.SignedRKSyncMessage, error) {
-	fi, err := p.GetFileSystem().Stat(p.filename)
+	fi, err := p.GetFileSystem().Stat(p.chainID, p.filename)
 	if err != nil {
 		logging.Warningf("Failed to stat file %s: %s", p.filename, err)
 		return nil, err
