@@ -2,6 +2,7 @@ package protos
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/gogo/protobuf/proto"
@@ -97,7 +98,74 @@ type SignedRKSyncMessage struct {
 
 // String returns a string representation of a SignedRKSyncMessage
 func (m *SignedRKSyncMessage) String() string {
-	return ""
+	env := "No envelope"
+	if m.Envelope != nil {
+		env = fmt.Sprintf("%d bytes, Signature: %d bytes %s", len(m.Envelope.Payload), len(m.Envelope.Signature), hex.EncodeToString(m.Envelope.Signature))
+	}
+
+	msg := "No rksync message"
+	if m.RKSyncMessage != nil {
+		if m.IsAliveMsg() {
+			msg = aliveMessageToString(m.GetAliveMsg())
+		} else if m.IsStatePullRequestMsg() {
+			msg = statePullRequestToString(m.GetStatePullRequest())
+		} else if m.IsChainStateMsg() {
+			msg = chainStatMessageToString(m.GetState())
+		} else {
+			msg = m.RKSyncMessage.String()
+		}
+	}
+
+	return fmt.Sprintf("RKSyncMessage: %s, Envelope: %s", msg, env)
+}
+
+func chainStatMessageToString(cs *ChainState) string {
+	str := fmt.Sprintf("chain_state_message: Channel MAC: %s, Sequence: %d", hex.EncodeToString(cs.ChainMac), cs.SeqNum)
+	msg, err := cs.Envelope.ToRKSyncMessage()
+	if err == nil {
+		if msg.IsStateInfoMsg() {
+			str = fmt.Sprintf("%s, StateInfo: %s", str, chainStateInfoToString(msg.GetStateInfo()))
+		}
+	}
+	return str
+}
+
+func chainStateInfoToString(csi *ChainStateInfo) string {
+	return fmt.Sprintf("Leader: %s, Properties: %s", string(csi.Leader), chainStateInfoPropertyToString(csi.Properties))
+}
+
+func chainStateInfoPropertyToString(p *Properties) string {
+	buf := bytes.NewBufferString("Members: ")
+	for _, member := range p.Members {
+		buf.WriteString(string(member) + ",")
+	}
+
+	buf.WriteString("Files: ")
+	for _, file := range p.Files {
+		buf.WriteString(fmt.Sprintf("Path-%s, Mode: %s;", file.Path, File_Mode_name[int32(file.Mode)]))
+	}
+
+	return buf.String()
+}
+
+func statePullRequestToString(spr *ChainStatePullRequest) string {
+	return fmt.Sprintf("chain_state_pull_req: Channel MAC %s", hex.EncodeToString(spr.ChainMac))
+}
+
+func aliveMessageToString(am *AliveMessage) string {
+	if am.Membership == nil {
+		return "nil membership"
+	}
+	var si string
+	serializeIdentity := &SerializedIdentity{}
+	if err := proto.Unmarshal(am.Identity, serializeIdentity); err == nil {
+		si = serializeIdentity.NodeId + string(serializeIdentity.IdBytes)
+	}
+	return fmt.Sprintf("Alive message: %s, Identity: %s, Timestamp: %s", membershipToString(am.Membership), si, am.Timestamp)
+}
+
+func membershipToString(m *Member) string {
+	return fmt.Sprintf("Membership: Endpoint: %s, PKI-id: %s", m.Endpoint, m.PkiId)
 }
 
 // ConnectionInfo represents information about the remote peer
