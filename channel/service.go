@@ -250,6 +250,11 @@ func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 
 	if m.IsDataMsg() || m.IsDataReq() {
 		if m.IsDataMsg() {
+			if gc.leader {
+				logging.Debugf("Channel %s: Leader does not need to handle data message", gc.chainID)
+				return
+			}
+
 			if m.GetDataMsg().Payload == nil {
 				logging.Warningf("Payload is empty, got it from %s", msg.GetConnectionInfo().ID)
 				return
@@ -320,6 +325,10 @@ func (gc *gossipChannel) handleChainStateResponse(m *protos.RKSyncMessage, sende
 }
 
 func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.PKIidType) error {
+	if gc.leader {
+		logging.Debugf("Channel %s: Leader does not need to update chain state", gc.chainID)
+		return nil
+	}
 	chainStateInfo, err := msg.Envelope.ToRKSyncMessage()
 	if err != nil {
 		logging.Warningf("Channel %s: ChainState's envelope contains an invalid message: %+v", gc.chainID, err)
