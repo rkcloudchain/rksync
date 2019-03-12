@@ -3,7 +3,6 @@ package channel
 import (
 	"bytes"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -19,7 +18,6 @@ type gossipChannel struct {
 	Adapter
 	sync.RWMutex
 	fs                        config.FileSystem
-	shouldGossipStateInfo     int32
 	pkiID                     common.PKIidType
 	leader                    bool
 	chainStateMsg             *protos.ChainState
@@ -41,7 +39,6 @@ func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapt
 		leader:                    leader,
 		fs:                        adapter.GetChannelConfig().FileSystem,
 		chainID:                   chainID,
-		shouldGossipStateInfo:     int32(0),
 		idMapper:                  idMapper,
 		stopChan:                  make(chan struct{}),
 		stateInfoPublishScheduler: time.NewTicker(adapter.GetChannelConfig().PublishStateInfoInterval),
@@ -85,7 +82,6 @@ func (gc *gossipChannel) InitializeWithChainState(chainState *protos.ChainState)
 	}
 
 	gc.chainStateMsg = chainState
-	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(1))
 	return nil
 }
 
@@ -149,7 +145,6 @@ func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.F
 		}
 	}
 
-	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(1))
 	return chainState, nil
 }
 
@@ -181,7 +176,6 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 
 	gc.chainStateMsg.Envelope = envp
 	gc.members[string(member)] = member
-	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(1))
 	return gc.chainStateMsg, nil
 }
 
@@ -223,7 +217,6 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 	gc.chainStateMsg.Envelope = envp
 
 	gc.fileState.createProvider(file.Path, protos.File_Mode(mode), true)
-	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(1))
 	return gc.chainStateMsg, nil
 }
 
@@ -493,10 +486,6 @@ func (gc *gossipChannel) periodicalInvocation(fn func(), c <-chan time.Time) {
 }
 
 func (gc *gossipChannel) publishStateInfo() {
-	if atomic.LoadInt32(&gc.shouldGossipStateInfo) == int32(0) {
-		return
-	}
-
 	gc.RLock()
 	chainStateMsg := gc.chainStateMsg
 	gc.RUnlock()
@@ -522,10 +511,6 @@ func (gc *gossipChannel) publishStateInfo() {
 	}
 
 	gc.Gossip(msg)
-
-	if len(gc.GetMembership()) > 0 {
-		atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(0))
-	}
 }
 
 func (gc *gossipChannel) requestStateInfo() {
