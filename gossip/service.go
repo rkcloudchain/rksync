@@ -3,6 +3,7 @@ package gossip
 import (
 	"bytes"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"reflect"
 	"sync"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/discovery"
@@ -138,6 +140,43 @@ func (g *gossipService) Accept(acceptor common.MessageAcceptor, passThrough bool
 		}
 	}()
 	return outCh, nil
+}
+
+func (g *gossipService) InitializeChannel(chainID string, chainState *protos.ChainState) error {
+	if chainID == "" {
+		return errors.New("Channel ID must be provided")
+	}
+	if g.toDie() {
+		return errors.New("RKSync service is stopping")
+	}
+
+	mac := channel.GenerateMAC(g.selfPKIid, chainID)
+	if !bytes.Equal(chainState.ChainMac, mac) {
+		return errors.Errorf("Channel MAC doesn't match, expected: %s, actual: %s", hex.EncodeToString(mac), hex.EncodeToString(chainState.ChainMac))
+	}
+
+	signedMsg, err := chainState.Envelope.ToRKSyncMessage()
+	if err != nil {
+		return errors.Wrapf(err, "Failed to parse channel %s state information", chainID)
+	}
+
+	err = signedMsg.Verify(g.selfPKIid, func(peerIdentity []byte, signature, message []byte) error {
+		return g.idMapper.Verify(peerIdentity, signature, message)
+	})
+	if err != nil {
+		return errors.Wrapf(err, "Failed verifying %s chain state information signature: %s", chainID, err)
+	}
+
+	stateInfo, err := chainState.GetChainStateInfo()
+	if err != nil {
+		return errors.Errorf("Channel %s: state information format error: %s", chainID, err)
+	}
+	if !bytes.Equal(common.PKIidType(stateInfo.Leader), g.selfPKIid) {
+		return errors.Errorf("Channel %s: current peer's PKI-ID (%s) doesn't match the leader PKI-ID (%s)", chainID, g.selfPKIid, common.PKIidType(stateInfo.Leader))
+	}
+
+	gc := g.chanState.joinChannel(chainID, true)
+	return gc.InitializeWithChainState(chainState)
 }
 
 func (g *gossipService) AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error) {

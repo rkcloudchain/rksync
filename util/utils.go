@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -173,4 +174,21 @@ func RandomInt(n int) int {
 		return n + m
 	}
 	return m
+}
+
+// ListSubdirs returns the subdirectories
+func ListSubdirs(dirPath string) ([]string, error) {
+	subdirs := []string{}
+	files, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading dir %s", dirPath)
+	}
+
+	for _, f := range files {
+		if f.IsDir() {
+			subdirs = append(subdirs, f.Name())
+		}
+	}
+
+	return subdirs, nil
 }

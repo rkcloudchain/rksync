@@ -32,6 +32,9 @@ type Channel interface {
 	// Initialize allocates the ChainState and should be invoked once per channel per creation
 	Initialize([]common.PKIidType, []common.FileSyncInfo) (*protos.ChainState, error)
 
+	// InitializeWithChanState allocates the ChainState message
+	InitializeWithChainState(*protos.ChainState) error
+
 	// AddMember adds member to the channel
 	AddMember(common.PKIidType) (*protos.ChainState, error)
 

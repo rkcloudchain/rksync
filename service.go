@@ -94,6 +94,7 @@ func InitRKSyncService(cfg config.Config) error {
 		serve <- grpcErr
 	}()
 
+	go initializeChannel()
 	go handleSignals(map[os.Signal]func(){
 		syscall.SIGINT:  func() { serve <- nil },
 		syscall.SIGTERM: func() { serve <- nil },
@@ -170,6 +171,40 @@ func AddFileToChan(chainID string, filepath string, filemode string) error {
 	}
 
 	return rewriteChainConfigFile(chainID, chainState)
+}
+
+func initializeChannel() {
+	dirs, err := util.ListSubdirs(fileSystemPath)
+	if err != nil {
+		logging.Error(err.Error())
+		return
+	}
+
+	for _, dir := range dirs {
+		path := filepath.Join(fileSystemPath, dir, "config.pb")
+		if _, err := os.Stat(path); err != nil {
+			logging.Errorf("Error reading channel %s config file: %s", dir, err)
+			continue
+		}
+
+		csBytes, err := ioutil.ReadFile(path)
+		if err != nil {
+			logging.Errorf("Error reading channel %s config file: %s", dir, err)
+			continue
+		}
+
+		chainState := &protos.ChainState{}
+		err = proto.Unmarshal(csBytes, chainState)
+		if err != nil {
+			logging.Errorf("Error unmarshalling channel %s state message: %s", dir, err)
+			continue
+		}
+
+		err = rkSyncSvc.InitializeChannel(dir, chainState)
+		if err != nil {
+			logging.Errorf("Error initializing channel %s: %s", dir, err)
+		}
+	}
 }
 
 func rewriteChainConfigFile(chainID string, chainState *protos.ChainState) error {

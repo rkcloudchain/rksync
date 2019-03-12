@@ -28,6 +28,9 @@ type Gossip interface {
 	// GetPKIidOfCert returns the PKI-ID of a certificate
 	GetPKIidOfCert(nodeID string, cert *x509.Certificate) (common.PKIidType, error)
 
+	// InitializeChannel initialize channel
+	InitializeChannel(chainID string, chainState *protos.ChainState) error
+
 	// CreateChannel creates a channel
 	CreateChannel(chainID string, files []common.FileSyncInfo) (*protos.ChainState, error)
 

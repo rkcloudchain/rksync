@@ -64,6 +64,31 @@ func (gc *gossipChannel) Self() *protos.ChainState {
 	return gc.chainStateMsg
 }
 
+func (gc *gossipChannel) InitializeWithChainState(chainState *protos.ChainState) error {
+	gc.Lock()
+	defer gc.Unlock()
+
+	stateInfo, err := chainState.GetChainStateInfo()
+	if err != nil {
+		return err
+	}
+
+	for _, member := range stateInfo.Properties.Members {
+		gc.members[string(common.PKIidType(member))] = member
+	}
+
+	for _, file := range stateInfo.Properties.Files {
+		err := gc.fileState.createProvider(file.Path, file.Mode, true)
+		if err != nil {
+			return err
+		}
+	}
+
+	gc.chainStateMsg = chainState
+	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(1))
+	return nil
+}
+
 func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.FileSyncInfo) (*protos.ChainState, error) {
 	gc.Lock()
 	defer gc.Unlock()
@@ -77,7 +102,7 @@ func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.F
 	}
 
 	for i, member := range members {
-		gc.members[string(member)] = member
+		gc.members[string(common.PKIidType(member))] = member
 		stateInfo.Properties.Members[i] = []byte(member)
 	}
 	for i, file := range files {
@@ -117,12 +142,8 @@ func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.F
 	}
 	gc.chainStateMsg = chainState
 
-	for _, file := range files {
-		filemode, exists := protos.File_Mode_value[file.Mode]
-		if !exists {
-			return nil, errors.Errorf("Unknown file mode %s", file.Mode)
-		}
-		err := gc.fileState.createProvider(file.Path, protos.File_Mode(filemode), true)
+	for _, file := range stateInfo.Properties.Files {
+		err := gc.fileState.createProvider(file.Path, file.Mode, true)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed creating file sync provider")
 		}
