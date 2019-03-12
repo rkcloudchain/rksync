@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"syscall"
 
@@ -25,9 +26,11 @@ import (
 )
 
 var (
-	rkSyncSvc      gossip.Gossip
-	clientCreds    credentials.TransportCredentials
-	fileSystemPath string
+	rkSyncSvc           gossip.Gossip
+	clientCreds         credentials.TransportCredentials
+	fileSystemPath      string
+	channelAllowedChars = "[a-z][a-z0-9.-]*"
+	maxLength           = 249
 )
 
 // InitRKSyncService initialize rksync service
@@ -106,23 +109,21 @@ func CreateChannel(chainID string, files []common.FileSyncInfo) error {
 		return errors.New("You need initialize RKSync service first")
 	}
 
+	if err := validateChannelID(chainID); err != nil {
+		return errors.Errorf("Bad channel id: %s", err)
+	}
+
 	chainState, err := rkSyncSvc.CreateChannel(chainID, files)
 	if err != nil {
 		return err
 	}
 
-	csBytes, err := proto.Marshal(chainState)
+	err = rewriteChainConfigFile(chainID, chainState)
 	if err != nil {
 		rkSyncSvc.CloseChannel(chainID)
 		return err
 	}
 
-	filename := filepath.Join(fileSystemPath, chainID, "config.pb")
-	err = ioutil.WriteFile(filename, csBytes, 0644)
-	if err != nil {
-		rkSyncSvc.CloseChannel(chainID)
-		return err
-	}
 	return nil
 }
 
@@ -172,13 +173,21 @@ func AddFileToChan(chainID string, filepath string, filemode string) error {
 }
 
 func rewriteChainConfigFile(chainID string, chainState *protos.ChainState) error {
+	dir := filepath.Join(fileSystemPath, chainID)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.MkdirAll(dir, 0755)
+		if err != nil {
+			return errors.Wrapf(err, "Create directory %s failed: %s", dir, err)
+		}
+	}
+
 	csBytes, err := proto.Marshal(chainState)
 	if err != nil {
 		return err
 	}
 
-	filename := filepath.Join(fileSystemPath, chainID, "config.pb")
-	fi, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC, 0644)
+	filename := filepath.Join(dir, "config.pb")
+	fi, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
@@ -266,4 +275,21 @@ func handleSignals(handlers map[os.Signal]func()) {
 		logging.Infof("Received signal: %d (%s)", sig, sig)
 		handlers[sig]()
 	}
+}
+
+func validateChannelID(chainID string) error {
+	re, _ := regexp.Compile(channelAllowedChars)
+	if len(chainID) <= 0 {
+		return errors.New("Channel ID illegal, cannot be empty")
+	}
+	if len(chainID) > maxLength {
+		return errors.Errorf("Channel ID illegal, cannot be longer than %d", maxLength)
+	}
+
+	matched := re.FindString(chainID)
+	if len(matched) != len(chainID) {
+		return errors.Errorf("Channel ID %s contains illegal characters", chainID)
+	}
+
+	return nil
 }
