@@ -69,7 +69,7 @@ func NewFileSyncProvider(chainID, filename string, mode protos.File_Mode, leader
 		p.done.Add(3)
 		go p.processDataReq()
 		go p.listen()
-		go p.periodicalInvocation(5 * time.Second)
+		go p.periodicalInvocation(4 * time.Second)
 	} else {
 		p.done.Add(1)
 		go p.processDataReq()
@@ -174,6 +174,12 @@ func (p *FileSyncProvier) processDataReq() {
 }
 
 func (p *FileSyncProvier) processPayloads() {
+	swapped := atomic.CompareAndSwapInt32(&p.state, int32(0), int32(2))
+	if !swapped {
+		return
+	}
+	defer func() { atomic.StoreInt32(&p.state, int32(0)) }()
+
 	logging.Debugf("[%s] Ready to process payloads, next payload start number is = [%d]", p.filename, p.payloads.Next())
 	fs := p.GetFileSystem()
 	f, err := fs.OpenFile(p.chainID, p.filename, os.O_WRONLY|os.O_APPEND, os.ModePerm)
@@ -226,11 +232,12 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 		return
 	}
 
-	if atomic.LoadInt32(&p.state) != int32(1) {
-		swapped := atomic.CompareAndSwapInt32(&p.state, int32(0), int32(1))
-		if !swapped {
+	swapped := atomic.CompareAndSwapInt32(&p.state, int32(0), int32(1))
+	if !swapped {
+		if atomic.LoadInt32(&p.state) != int32(1) {
 			return
 		}
+	} else {
 		defer func() { atomic.StoreInt32(&p.state, int32(0)) }()
 	}
 
@@ -278,11 +285,20 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 
 		for {
 			n, err = f.ReadAt(data, start)
-			if err != nil {
-				if err != io.EOF {
-					logging.Warningf("Read file %s failed: %s", p.filename, err)
+			if err == io.EOF {
+				if n > 0 {
+					sMsg, err := p.createAppendDataMsg(data, n, start)
+					if err != nil {
+						logging.Warningf("Failed creating DataMessage: %v", err)
+						return
+					}
+					p.SendToPeer(sMsg, peer)
 				}
-				break
+				return
+			}
+			if err != nil {
+				logging.Warningf("Read file %s failed: %s", p.filename, err)
+				return
 			}
 
 			sMsg, err := p.createAppendDataMsg(data, n, start)

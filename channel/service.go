@@ -202,7 +202,7 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 	gc.chainStateMsg.Envelope = envp
 
 	gc.fileState.createProvider(file.Path, protos.File_Mode(mode), true)
-	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(0))
+	atomic.StoreInt32(&gc.shouldGossipStateInfo, int32(1))
 	return gc.chainStateMsg, nil
 }
 
@@ -251,7 +251,7 @@ func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 	if m.IsDataMsg() || m.IsDataReq() {
 		if m.IsDataMsg() {
 			if gc.leader {
-				logging.Debugf("Channel %s: Leader does not need to handle data message", gc.chainID)
+				logging.Infof("Channel %s: Leader does not need to handle data message", gc.chainID)
 				return
 			}
 
@@ -326,7 +326,7 @@ func (gc *gossipChannel) handleChainStateResponse(m *protos.RKSyncMessage, sende
 
 func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.PKIidType) error {
 	if gc.leader {
-		logging.Debugf("Channel %s: Leader does not need to update chain state", gc.chainID)
+		logging.Infof("Channel %s: Leader does not need to update chain state", gc.chainID)
 		return nil
 	}
 	chainStateInfo, err := msg.Envelope.ToRKSyncMessage()
