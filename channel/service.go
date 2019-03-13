@@ -34,21 +34,22 @@ type gossipChannel struct {
 func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapter Adapter, idMapper identity.Identity) Channel {
 
 	gc := &gossipChannel{
-		pkiID:                     pkiID,
-		Adapter:                   adapter,
-		leader:                    leader,
-		fs:                        adapter.GetChannelConfig().FileSystem,
-		chainID:                   chainID,
-		idMapper:                  idMapper,
-		stopChan:                  make(chan struct{}),
-		stateInfoPublishScheduler: time.NewTicker(adapter.GetChannelConfig().PublishStateInfoInterval),
-		stateInfoRequestScheduler: time.NewTicker(adapter.GetChannelConfig().RequestStateInfoInterval),
-		members:                   make(map[string]common.PKIidType),
+		pkiID:    pkiID,
+		Adapter:  adapter,
+		leader:   leader,
+		fs:       adapter.GetChannelConfig().FileSystem,
+		chainID:  chainID,
+		idMapper: idMapper,
+		stopChan: make(chan struct{}),
+		members:  make(map[string]common.PKIidType),
 	}
 	gc.fileState = newFSyncState(gc)
 
-	go gc.periodicalInvocation(gc.publishStateInfo, gc.stateInfoPublishScheduler.C)
-	if !gc.leader {
+	if gc.leader {
+		gc.stateInfoPublishScheduler = time.NewTicker(adapter.GetChannelConfig().PublishStateInfoInterval)
+		go gc.periodicalInvocation(gc.publishStateInfo, gc.stateInfoPublishScheduler.C)
+	} else {
+		gc.stateInfoRequestScheduler = time.NewTicker(adapter.GetChannelConfig().RequestStateInfoInterval)
 		go gc.periodicalInvocation(gc.requestStateInfo, gc.stateInfoRequestScheduler.C)
 	}
 
@@ -303,8 +304,12 @@ func (gc *gossipChannel) IsMemberInChan(member common.NetworkMember) bool {
 func (gc *gossipChannel) Stop() {
 	gc.stopChan <- struct{}{}
 	gc.fileState.stop()
-	gc.stateInfoPublishScheduler.Stop()
-	gc.stateInfoRequestScheduler.Stop()
+	if gc.stateInfoPublishScheduler != nil {
+		gc.stateInfoPublishScheduler.Stop()
+	}
+	if gc.stateInfoRequestScheduler != nil {
+		gc.stateInfoRequestScheduler.Stop()
+	}
 }
 
 func (gc *gossipChannel) handleChainStateResponse(m *protos.RKSyncMessage, sender common.PKIidType) {
