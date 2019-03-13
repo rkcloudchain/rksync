@@ -357,27 +357,30 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 		return
 	}
 
-	if msg.IsChannelRestricted() {
-		if g.chainStateMsgStore.Add(msg) {
-			gc := g.chanState.lookupChannelForMsg(m)
-			if gc == nil {
-				if !msg.IsChainStateMsg() && !g.toDie() {
-					logging.Debug("No such channel", msg.Channel, "discarding message", msg)
-					return
-				}
+	if msg.IsChainStateMsg() {
+		g.emitter.Add(&emittedRKSyncMessage{
+			SignedRKSyncMessage: msg,
+			filter:              m.GetConnectionInfo().ID.IsNotSameFilter,
+		})
 
-				if !g.isInChannel(m) {
-					g.emitter.Add(&emittedRKSyncMessage{
-						SignedRKSyncMessage: msg,
-						filter:              m.GetConnectionInfo().ID.IsNotSameFilter,
-					})
-				} else {
-					gc = g.chanState.joinChannel(string(msg.Channel), false)
-				}
+		added := g.chainStateMsgStore.Add(msg)
+		if added {
+			gc := g.chanState.lookupChannelForMsg(m)
+			if gc == nil && g.isInChannel(m) {
+				gc = g.chanState.joinChannel(string(msg.Channel), false)
 			}
+
 			if gc != nil {
 				gc.HandleMessage(m)
 			}
+		}
+		return
+	}
+
+	if msg.IsChannelRestricted() {
+		gc := g.chanState.lookupChannelForMsg(m)
+		if gc != nil {
+			gc.HandleMessage(m)
 		}
 		return
 	}
