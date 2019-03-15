@@ -72,7 +72,7 @@ func TestHandshake(t *testing.T) {
 	err = proto.Unmarshal(id, sid)
 	assert.NoError(t, err)
 
-	assert.Equal(t, "peer0.org1", sid.NodeId)
+	assert.Equal(t, "peer0.org2", sid.NodeId)
 }
 
 func TestNonResponsivePing(t *testing.T) {
