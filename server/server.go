@@ -16,6 +16,7 @@ import (
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/util"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // GRPCServer is the wrapper of grpc.Server
@@ -98,7 +99,7 @@ func NewGRPCServerFromListener(listener net.Listener, serverConfig *config.Serve
 				}
 			}
 
-			creds := NewServerTransportCredentials(grpcServer.tlsConfig)
+			creds := credentials.NewTLS(grpcServer.tlsConfig)
 			serverOpts = append(serverOpts, grpc.Creds(creds))
 
 		} else {
