@@ -10,17 +10,19 @@ package identity
 import (
 	"bytes"
 	"crypto"
-	"crypto/ecdsa"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
-	"fmt"
+	"encoding/hex"
 	"io/ioutil"
 	"sync"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.com/rkcloudchain/cccsp"
+	"github.com/rkcloudchain/cccsp/hash"
+	"github.com/rkcloudchain/cccsp/importer"
+	"github.com/rkcloudchain/cccsp/provider"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/logging"
@@ -44,7 +46,8 @@ type identityMapper struct {
 	certs     map[string]*storedIdentity
 	opts      *x509.VerifyOptions
 	rootCerts []*x509.Certificate
-	privKey   interface{}
+	csp       cccsp.CCCSP
+	signer    crypto.Signer
 	sync.RWMutex
 }
 
@@ -60,6 +63,14 @@ func NewIdentity(cfg *config.IdentityConfig, selfIdentity common.PeerIdentityTyp
 	}
 
 	selfPKIID := identity.GetPKIidOfCert(selfIdentity)
+	cspDir, err := util.MakeFileAbs("csp", cfg.HomeDir)
+	if err != nil {
+		return nil, err
+	}
+	identity.csp, err = provider.New(cspDir)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := identity.setupCAs(cfg); err != nil {
 		return nil, err
@@ -139,31 +150,16 @@ func (is *identityMapper) Get(pkiID common.PKIidType) (*x509.Certificate, error)
 }
 
 func (is *identityMapper) Sign(msg []byte) ([]byte, error) {
-	if is.privKey == nil {
-		return nil, errors.New("expected the private key")
+	if is.signer == nil {
+		return nil, errors.New("The signer must not be nil")
 	}
 
-	privateKey := is.privKey
-	switch privateKey.(type) {
-	case *ecdsa.PrivateKey:
-		r, s, err := ecdsa.Sign(rand.Reader, privateKey.(*ecdsa.PrivateKey), msg)
-		if err != nil {
-			return nil, err
-		}
-
-		s, _, err = util.ToLowS(&privateKey.(*ecdsa.PrivateKey).PublicKey, s)
-		if err != nil {
-			return nil, err
-		}
-
-		return util.MarshalECDSASignature(r, s)
-
-	case *rsa.PrivateKey:
-		return privateKey.(*rsa.PrivateKey).Sign(rand.Reader, msg, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthAuto, Hash: crypto.SHA256})
-
-	default:
-		return nil, errors.New("Unsupported secret key type")
+	digest, err := is.csp.Hash(msg, hash.SHA3256)
+	if err != nil {
+		return nil, err
 	}
+
+	return is.signer.Sign(rand.Reader, digest, nil)
 }
 
 func (is *identityMapper) Verify(vkID common.PKIidType, signature, message []byte) error {
@@ -172,39 +168,25 @@ func (is *identityMapper) Verify(vkID common.PKIidType, signature, message []byt
 		return err
 	}
 
-	switch cert.PublicKey.(type) {
-	case *ecdsa.PublicKey:
-		publicKey := cert.PublicKey.(*ecdsa.PublicKey)
-		r, s, err := util.UnmarshalECDSASignature(signature)
-		if err != nil {
-			return fmt.Errorf("Failed unmarshalling signature [%s]", err)
-		}
-
-		lowS, err := util.IsLowS(publicKey, s)
-		if err != nil {
-			return err
-		}
-
-		if !lowS {
-			return fmt.Errorf("Invalid S. Must be smaller than half the order [%s][%s]", s, util.GetCurveHalfOrdersAt(publicKey.Curve))
-		}
-
-		valid := ecdsa.Verify(publicKey, message, r, s)
-		if !valid {
-			return errors.New("The signature is invalid")
-		}
-		return nil
-
-	case *rsa.PublicKey:
-		err := rsa.VerifyPSS(cert.PublicKey.(*rsa.PublicKey), crypto.SHA256, message, signature, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthAuto})
-		if err != nil {
-			return errors.WithMessage(err, "could not determine the validity of the signature")
-		}
-		return nil
-
-	default:
-		return errors.New("Unsupported secret key type")
+	k, err := is.csp.KeyImport(cert, importer.X509CERT, true)
+	if err != nil {
+		return err
 	}
+
+	digest, err := is.csp.Hash(message, hash.SHA3256)
+	if err != nil {
+		return err
+	}
+
+	valid, err := is.csp.Verify(k, signature, digest, nil)
+	if err != nil {
+		return errors.Wrap(err, "Could not determine the validity of the signature")
+	}
+	if !valid {
+		return errors.New("The signature is invalid")
+	}
+
+	return nil
 }
 
 func (is *identityMapper) GetPKIidOfCert(peerIdentity common.PeerIdentityType) common.PKIidType {
@@ -227,13 +209,14 @@ func (is *identityMapper) GetPKIidOfCert(peerIdentity common.PeerIdentityType) c
 }
 
 func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
-	if len(conf.CAs) == 0 {
+	caFiles := conf.GetCACerts()
+	if len(caFiles) == 0 {
 		return errors.New("expected at least one CA certificate")
 	}
 
 	is.opts = &x509.VerifyOptions{Roots: x509.NewCertPool(), Intermediates: x509.NewCertPool()}
-	rootCAs := make([]*x509.Certificate, len(conf.CAs))
-	for i, v := range conf.CAs {
+	rootCAs := make([]*x509.Certificate, len(caFiles))
+	for i, v := range caFiles {
 		certPEM, err := ioutil.ReadFile(v)
 		if err != nil {
 			return err
@@ -247,7 +230,7 @@ func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
 		is.opts.Roots.AddCert(cert)
 	}
 
-	is.rootCerts = make([]*x509.Certificate, len(conf.CAs))
+	is.rootCerts = make([]*x509.Certificate, len(caFiles))
 	for i, trustedCert := range rootCAs {
 		cert, err := is.sanitizeCert(trustedCert)
 		if err != nil {
@@ -266,18 +249,7 @@ func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
 }
 
 func (is *identityMapper) setupCSP(conf *config.IdentityConfig) error {
-	if conf.Certificate == "" {
-		return errors.New("expected a certificate file")
-	}
-	if conf.Key == "" {
-		return errors.New("expected a key file")
-	}
-
-	certPEM, err := ioutil.ReadFile(conf.Certificate)
-	if err != nil {
-		return err
-	}
-	keyPEM, err := ioutil.ReadFile(conf.Key)
+	certPEM, err := ioutil.ReadFile(conf.GetCertificate())
 	if err != nil {
 		return err
 	}
@@ -287,31 +259,25 @@ func (is *identityMapper) setupCSP(conf *config.IdentityConfig) error {
 		return err
 	}
 
-	pubKey := cert.PublicKey
-	switch pubKey.(type) {
-	case *rsa.PublicKey:
-		privKey, err := util.GetRSAPrivateKey(keyPEM)
-		if err != nil {
-			return err
-		}
-		if privKey.PublicKey.N.Cmp(pubKey.(*rsa.PublicKey).N) != 0 {
-			return errors.New("Public key and private key do not match")
-		}
-		is.privKey = privKey
-
-	case *ecdsa.PublicKey:
-		privKey, err := util.GetECPrivateKey(keyPEM)
-		if err != nil {
-			return err
-		}
-		if privKey.PublicKey.X.Cmp(pubKey.(*ecdsa.PublicKey).X) != 0 {
-			return errors.New("Public key and private key do not match")
-		}
-		is.privKey = privKey
-
-	default:
-		return errors.New("Unsupported secret key type")
+	certPubK, err := is.csp.KeyImport(cert, importer.X509CERT, true)
+	if err != nil {
+		return errors.Wrap(err, "Failed to import certificate's public key")
 	}
+
+	id := certPubK.Identifier()
+	privateKey, err := is.csp.GetKey(id)
+	if err != nil {
+		return errors.Wrap(err, "Could not find matching private key for SKI")
+	}
+	if !privateKey.Private() {
+		return errors.Errorf("The private key associated with the certificate with SKI '%s' was not found", hex.EncodeToString(id))
+	}
+
+	signer, err := provider.NewSigner(is.csp, privateKey)
+	if err != nil {
+		return errors.Wrap(err, "Failed to create signer from cccsp")
+	}
+	is.signer = signer
 
 	return nil
 }
@@ -364,7 +330,7 @@ func (is *identityMapper) getUniqueValidationChain(cert *x509.Certificate) ([]*x
 	return validationChains[0], nil
 }
 
-type storedIdentity struct{
+type storedIdentity struct {
 	pkiID           common.PKIidType
 	identity        *x509.Certificate
 	expirationTimer *time.Timer
@@ -377,4 +343,3 @@ func newStoredIdentity(pkiID common.PKIidType, identity *x509.Certificate, expir
 		expirationTimer: expirationTimer,
 	}
 }
-

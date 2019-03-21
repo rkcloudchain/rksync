@@ -10,9 +10,12 @@ package config
 import (
 	"crypto/tls"
 	"io"
+	"io/ioutil"
 	"os"
 	"time"
 
+	"github.com/pkg/errors"
+	"github.com/rkcloudchain/rksync/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
@@ -70,10 +73,68 @@ type GossipConfig struct {
 
 // IdentityConfig defines the identity parameters for peer
 type IdentityConfig struct {
-	ID          string // ID of this instance
-	Certificate string
-	Key         string
-	CAs         []string
+	ID      string // ID of this instance
+	HomeDir string
+
+	certFile string
+	caFiles  []string
+}
+
+// GetCertificate returns the certificate file associated with the configuration
+func (c *IdentityConfig) GetCertificate() string {
+	return c.certFile
+}
+
+// GetCACerts returns the ca certificate files associated with the configuration
+func (c *IdentityConfig) GetCACerts() []string {
+	return c.caFiles
+}
+
+// MakeFilesAbs makes files absolute relative to 'HomeDir' if not already absolute
+func (c *IdentityConfig) MakeFilesAbs() error {
+	if c.HomeDir == "" {
+		return errors.New("HomeDir must be provided")
+	}
+	var err error
+	c.certFile, err = util.MakeFileAbs("csp/signcerts/cert.pem", c.HomeDir)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(c.certFile); err != nil {
+		return err
+	}
+
+	caCertsDir, err := util.MakeFileAbs("csp/cacerts", c.HomeDir)
+	if err != nil {
+		return err
+	}
+	fi, err := os.Stat(caCertsDir)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return errors.Errorf("%s: is not a directory", caCertsDir)
+	}
+
+	files, err := ioutil.ReadDir(caCertsDir)
+	if err != nil {
+		return err
+	}
+
+	c.caFiles = make([]string, 0)
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		cafile, err := util.MakeFileAbs(file.Name(), caCertsDir)
+		if err != nil {
+			return err
+		}
+		c.caFiles = append(c.caFiles, cafile)
+	}
+
+	return nil
 }
 
 // ServerConfig defines the parameters for configuring a GRPCServer instance

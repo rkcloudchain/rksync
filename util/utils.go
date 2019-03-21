@@ -18,6 +18,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"math/rand"
+	"path/filepath"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -197,4 +198,19 @@ func ListSubdirs(dirPath string) ([]string, error) {
 	}
 
 	return subdirs, nil
+}
+
+// MakeFileAbs makes 'file' absolute relative to 'dir' if not already absolute
+func MakeFileAbs(file, dir string) (string, error) {
+	if file == "" {
+		return "", nil
+	}
+	if filepath.IsAbs(file) {
+		return file, nil
+	}
+	path, err := filepath.Abs(filepath.Join(dir, file))
+	if err != nil {
+		return "", errors.Wrapf(err, "Failed making '%s' absolute based on '%s'", file, dir)
+	}
+	return path, nil
 }

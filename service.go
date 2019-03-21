@@ -71,7 +71,7 @@ func InitRKSyncService(cfg config.Config) error {
 		}
 	}
 
-	serializedIdentity, err := serializeIdentity(&cfg)
+	serializedIdentity, err := serializeIdentity(cfg.Identity)
 	if err != nil {
 		return errors.Errorf("Failed serializing self identity: %v", err)
 	}
@@ -258,15 +258,15 @@ func secureDialOpts(cfg *config.Config) []grpc.DialOption {
 	return dialOpts
 }
 
-func serializeIdentity(cfg *config.Config) (common.PeerIdentityType, error) {
-	if cfg.Identity.ID == "" {
+func serializeIdentity(cfg *config.IdentityConfig) (common.PeerIdentityType, error) {
+	if cfg.ID == "" {
 		return nil, errors.New("Node id must be provided")
 	}
-	if cfg.Identity.Certificate == "" || cfg.Identity.Key == "" {
-		return nil, errors.New("Identity config must contain both Key and Certificate")
+	if err := cfg.MakeFilesAbs(); err != nil {
+		return nil, errors.Wrap(err, "Failed to make identity file absolute")
 	}
 
-	certPEM, err := ioutil.ReadFile(cfg.Identity.Certificate)
+	certPEM, err := ioutil.ReadFile(cfg.GetCertificate())
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +282,7 @@ func serializeIdentity(cfg *config.Config) (common.PeerIdentityType, error) {
 		return nil, errors.New("Encoding of identity failed")
 	}
 
-	sID := &protos.SerializedIdentity{NodeId: cfg.Identity.ID, IdBytes: pemBytes}
+	sID := &protos.SerializedIdentity{NodeId: cfg.ID, IdBytes: pemBytes}
 	idBytes, err := proto.Marshal(sID)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not marshal a SerializedIdentity structure for identity %v", sID)
