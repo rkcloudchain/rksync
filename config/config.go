@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/pkg/errors"
@@ -76,8 +77,9 @@ type IdentityConfig struct {
 	ID      string // ID of this instance
 	HomeDir string
 
-	certFile string
-	caFiles  []string
+	certFile            string
+	rootCAFiles         []string
+	intermediateCAFiles []string
 }
 
 // GetCertificate returns the certificate file associated with the configuration
@@ -85,9 +87,14 @@ func (c *IdentityConfig) GetCertificate() string {
 	return c.certFile
 }
 
-// GetCACerts returns the ca certificate files associated with the configuration
-func (c *IdentityConfig) GetCACerts() []string {
-	return c.caFiles
+// GetRootCACerts returns the root ca certificate files associated with the configuration
+func (c *IdentityConfig) GetRootCACerts() []string {
+	return c.rootCAFiles
+}
+
+// GetIntermediateCACerts returns the intermediate ca certificate files associated with the configuration
+func (c *IdentityConfig) GetIntermediateCACerts() []string {
+	return c.intermediateCAFiles
 }
 
 // MakeFilesAbs makes files absolute relative to 'HomeDir' if not already absolute
@@ -95,6 +102,21 @@ func (c *IdentityConfig) MakeFilesAbs() error {
 	if c.HomeDir == "" {
 		return errors.New("HomeDir must be provided")
 	}
+
+	err := c.setupCertificate()
+	if err != nil {
+		return err
+	}
+
+	err = c.setupRootCAs()
+	if err != nil {
+		return err
+	}
+
+	return c.setupIntermediateCAs()
+}
+
+func (c *IdentityConfig) setupCertificate() error {
 	var err error
 	c.certFile, err = util.MakeFileAbs("csp/signcerts/cert.pem", c.HomeDir)
 	if err != nil {
@@ -103,11 +125,52 @@ func (c *IdentityConfig) MakeFilesAbs() error {
 	if _, err := os.Stat(c.certFile); err != nil {
 		return err
 	}
+	return nil
+}
 
-	caCertsDir, err := util.MakeFileAbs("csp/cacerts", c.HomeDir)
+func (c *IdentityConfig) setupRootCAs() error {
+	rootCACertsDir, err := util.MakeFileAbs("csp/cacerts", c.HomeDir)
 	if err != nil {
 		return err
 	}
+	fi, err := os.Stat(rootCACertsDir)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return errors.Errorf("%s: is not a directory", rootCACertsDir)
+	}
+
+	files, err := ioutil.ReadDir(rootCACertsDir)
+	if err != nil {
+		return err
+	}
+
+	c.rootCAFiles = make([]string, 0)
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		if filepath.Ext(file.Name()) != ".pem" {
+			continue
+		}
+
+		cafile, err := util.MakeFileAbs(file.Name(), rootCACertsDir)
+		if err != nil {
+			return err
+		}
+		c.rootCAFiles = append(c.rootCAFiles, cafile)
+	}
+
+	return nil
+}
+
+func (c *IdentityConfig) setupIntermediateCAs() error {
+	caCertsDir, err := util.MakeFileAbs("csp/intermediatecerts", c.HomeDir)
+	if err != nil {
+		return err
+	}
+
 	fi, err := os.Stat(caCertsDir)
 	if err != nil {
 		return err
@@ -121,9 +184,12 @@ func (c *IdentityConfig) MakeFilesAbs() error {
 		return err
 	}
 
-	c.caFiles = make([]string, 0)
+	c.intermediateCAFiles = make([]string, 0)
 	for _, file := range files {
 		if file.IsDir() {
+			continue
+		}
+		if filepath.Ext(file.Name()) != ".pem" {
 			continue
 		}
 
@@ -131,7 +197,7 @@ func (c *IdentityConfig) MakeFilesAbs() error {
 		if err != nil {
 			return err
 		}
-		c.caFiles = append(c.caFiles, cafile)
+		c.intermediateCAFiles = append(c.intermediateCAFiles, cafile)
 	}
 
 	return nil

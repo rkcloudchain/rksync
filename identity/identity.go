@@ -42,12 +42,13 @@ type Identity interface {
 type purgeTrigger func(pkiID common.PKIidType)
 
 type identityMapper struct {
-	onPurge   purgeTrigger
-	certs     map[string]*storedIdentity
-	opts      *x509.VerifyOptions
-	rootCerts []*x509.Certificate
-	csp       cccsp.CCCSP
-	signer    crypto.Signer
+	onPurge           purgeTrigger
+	certs             map[string]*storedIdentity
+	opts              *x509.VerifyOptions
+	rootCerts         []*x509.Certificate
+	intermediateCerts []*x509.Certificate
+	csp               cccsp.CCCSP
+	signer            crypto.Signer
 	sync.RWMutex
 }
 
@@ -209,14 +210,15 @@ func (is *identityMapper) GetPKIidOfCert(peerIdentity common.PeerIdentityType) c
 }
 
 func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
-	caFiles := conf.GetCACerts()
-	if len(caFiles) == 0 {
+	rootCAFiles := conf.GetRootCACerts()
+	if len(rootCAFiles) == 0 {
 		return errors.New("expected at least one CA certificate")
 	}
 
 	is.opts = &x509.VerifyOptions{Roots: x509.NewCertPool(), Intermediates: x509.NewCertPool()}
-	rootCAs := make([]*x509.Certificate, len(caFiles))
-	for i, v := range caFiles {
+	rootCAs := make([]*x509.Certificate, len(rootCAFiles))
+	intermediateCAs := make([]*x509.Certificate, len(conf.GetIntermediateCACerts()))
+	for i, v := range rootCAFiles {
 		certPEM, err := ioutil.ReadFile(v)
 		if err != nil {
 			return err
@@ -229,20 +231,43 @@ func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
 		rootCAs[i] = cert
 		is.opts.Roots.AddCert(cert)
 	}
+	for i, v := range conf.GetIntermediateCACerts() {
+		certPEM, err := ioutil.ReadFile(v)
+		if err != nil {
+			return err
+		}
 
-	is.rootCerts = make([]*x509.Certificate, len(caFiles))
+		cert, err := util.GetX509CertificateFromPEM(certPEM)
+		if err != nil {
+			return err
+		}
+		intermediateCAs[i] = cert
+		is.opts.Intermediates.AddCert(cert)
+	}
+
+	is.rootCerts = make([]*x509.Certificate, len(rootCAFiles))
 	for i, trustedCert := range rootCAs {
 		cert, err := is.sanitizeCert(trustedCert)
 		if err != nil {
 			return err
 		}
-
 		is.rootCerts[i] = cert
+	}
+	is.intermediateCerts = make([]*x509.Certificate, len(conf.GetIntermediateCACerts()))
+	for i, trustedCert := range intermediateCAs {
+		cert, err := is.sanitizeCert(trustedCert)
+		if err != nil {
+			return err
+		}
+		is.intermediateCerts[i] = cert
 	}
 
 	is.opts = &x509.VerifyOptions{Roots: x509.NewCertPool(), Intermediates: x509.NewCertPool()}
 	for _, cert := range is.rootCerts {
 		is.opts.Roots.AddCert(cert)
+	}
+	for _, cert := range is.intermediateCerts {
+		is.opts.Intermediates.AddCert(cert)
 	}
 
 	return nil
