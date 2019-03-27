@@ -433,6 +433,10 @@ func (g *gossipService) forwardDiscoveryMsg(msg protos.ReceivedMessage) {
 	if g.discAdapter.toDie() {
 		return
 	}
+
+	defer func() { // can be closed while shutting down
+		recover()
+	}()
 	g.discAdapter.incChan <- msg
 }
 
