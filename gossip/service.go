@@ -430,10 +430,9 @@ func (g *gossipService) isInChannel(m protos.ReceivedMessage) bool {
 }
 
 func (g *gossipService) forwardDiscoveryMsg(msg protos.ReceivedMessage) {
-	defer func() {
-		recover()
-	}()
-
+	if g.discAdapter.toDie() {
+		return
+	}
 	g.discAdapter.incChan <- msg
 }
 
