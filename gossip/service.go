@@ -246,6 +246,7 @@ func (g *gossipService) Stop() {
 	logging.Info("Stopping gossip")
 	g.discAdapter.close()
 	g.disc.Stop()
+	g.chanState.stop()
 	g.toDieChan <- struct{}{}
 	g.emitter.Stop()
 	g.ChannelDeMultiplexer.Close()
