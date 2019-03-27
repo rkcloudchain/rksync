@@ -25,7 +25,7 @@ type Gossip interface {
 	// SelfChannelInfo returns the peer's latest ChainState message of a given channel
 	SelfChannelInfo(chainID string) *protos.ChainState
 
-	// AddMemberToChan adds memeber to channel
+	// AddMemberToChan adds member to channel
 	AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error)
 
 	// AddFileToChan adds file to channel

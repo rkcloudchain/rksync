@@ -1,0 +1,23 @@
+dist: xenial
+language: go
+
+matrix:
+  include:
+    - go: 1.11.x
+    - go: 1.12.x
+
+env:
+  - GO111MODULE=on
+
+branches:
+  only:
+    - master
+
+before_install:
+  - go get -t -v ./...
+
+script:
+  - ./go.test.sh
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash) -t 4e63ff73-b2e0-472c-9cb9-cdeb0ea3d068
