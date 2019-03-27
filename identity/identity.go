@@ -64,11 +64,11 @@ func NewIdentity(cfg *config.IdentityConfig, selfIdentity common.PeerIdentityTyp
 	}
 
 	selfPKIID := identity.GetPKIidOfCert(selfIdentity)
-	cspDir, err := util.MakeFileAbs("csp", cfg.HomeDir)
+	keyStoreDir, err := util.MakeFileAbs("csp/keystore", cfg.HomeDir)
 	if err != nil {
 		return nil, err
 	}
-	identity.csp, err = provider.New(cspDir)
+	identity.csp, err = provider.New(keyStoreDir)
 	if err != nil {
 		return nil, err
 	}

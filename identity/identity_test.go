@@ -8,12 +8,12 @@ package identity
 
 import (
 	"encoding/pem"
+	"path/filepath"
 	"testing"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/config"
-	"github.com/rkcloudchain/rksync/identity"
 	"github.com/rkcloudchain/rksync/protos"
 	"github.com/rkcloudchain/rksync/tests/util"
 	"github.com/stretchr/testify/assert"
@@ -21,6 +21,22 @@ import (
 )
 
 func TestVerify(t *testing.T) {
+	home, err := filepath.Abs("../tests/fixtures/identity/peer0")
+	require.NoError(t, err)
+
+	cfg := &config.IdentityConfig{
+		ID:      "peer0.org1",
+		HomeDir: home,
+	}
+	err = cfg.MakeFilesAbs()
+	require.NoError(t, err)
+
+	selfIdentity, err := util.GetIdentity(cfg)
+	require.NoError(t, err)
+
+	idMapper, err := NewIdentity(cfg, selfIdentity, func(_ common.PKIidType) {})
+	assert.NoError(t, err)
+
 	vid := idMapper.GetPKIidOfCert(selfIdentity)
 	require.NotNil(t, vid)
 
@@ -30,6 +46,22 @@ func TestVerify(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
+	home, err := filepath.Abs("../tests/fixtures/identity/peer0")
+	require.NoError(t, err)
+
+	cfg := &config.IdentityConfig{
+		ID:      "peer0.org1",
+		HomeDir: home,
+	}
+	err = cfg.MakeFilesAbs()
+	require.NoError(t, err)
+
+	selfIdentity, err := util.GetIdentity(cfg)
+	require.NoError(t, err)
+
+	idMapper, err := NewIdentity(cfg, selfIdentity, func(_ common.PKIidType) {})
+	assert.NoError(t, err)
+
 	vid := idMapper.GetPKIidOfCert(selfIdentity)
 	require.NotNil(t, vid)
 	assert.NoError(t, idMapper.Put(vid, selfIdentity))
@@ -44,19 +76,4 @@ func TestGet(t *testing.T) {
 	ident, err := proto.Marshal(sid)
 	require.Nil(t, err)
 	assert.Equal(t, selfIdentity, common.PeerIdentityType(ident))
-}
-
-func TestErrorCA(t *testing.T) {
-	certfile := util.GetIdentityPath("signcert.pem")
-	keyfile := util.GetIdentityPath("signkey")
-	cafile := util.GetIdentityPath("ca.org2.pem")
-
-	cfg := &config.IdentityConfig{
-		Certificate: certfile,
-		Key:         keyfile,
-		CAs:         []string{cafile},
-	}
-
-	_, err := identity.NewIdentity(cfg, selfIdentity, func(_ common.PKIidType) {})
-	assert.NotNil(t, err)
 }

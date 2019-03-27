@@ -11,23 +11,22 @@ import (
 	"testing"
 
 	"github.com/rkcloudchain/rksync/config"
-	rkserver "github.com/rkcloudchain/rksync/server"
 	"github.com/rkcloudchain/rksync/tests/util"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewGRPCServerInvalidParameters(t *testing.T) {
-	_, err := rkserver.NewGRPCServer("", &config.ServerConfig{
+	_, err := NewGRPCServer("", &config.ServerConfig{
 		SecOpts: &config.TLSConfig{UseTLS: false},
 	})
 	assert.Error(t, err)
 
-	_, err = rkserver.NewGRPCServer("abcdef", &config.ServerConfig{
+	_, err = NewGRPCServer("abcdef", &config.ServerConfig{
 		SecOpts: &config.TLSConfig{UseTLS: false},
 	})
 	assert.Error(t, err)
 
-	_, err = rkserver.NewGRPCServer("localhost:abcd", &config.ServerConfig{
+	_, err = NewGRPCServer("localhost:abcd", &config.ServerConfig{
 		SecOpts: &config.TLSConfig{UseTLS: false},
 	})
 	assert.Error(t, err)
@@ -38,7 +37,7 @@ func TestNewGRPCServerInvalidParameters(t *testing.T) {
 	}
 	defer lis.Close()
 
-	srv, err := rkserver.NewGRPCServerFromListener(lis, &config.ServerConfig{
+	srv, err := NewGRPCServerFromListener(lis, &config.ServerConfig{
 		SecOpts: &config.TLSConfig{UseTLS: false},
 	})
 	if err != nil {
@@ -46,7 +45,7 @@ func TestNewGRPCServerInvalidParameters(t *testing.T) {
 	}
 	defer srv.Stop()
 
-	_, err = rkserver.NewGRPCServer(lis.Addr().String(), &config.ServerConfig{
+	_, err = NewGRPCServer(lis.Addr().String(), &config.ServerConfig{
 		SecOpts: &config.TLSConfig{UseTLS: false},
 	})
 	assert.Contains(t, err.Error(), "address already in use")
@@ -54,7 +53,7 @@ func TestNewGRPCServerInvalidParameters(t *testing.T) {
 
 func TestNewGRPCServer(t *testing.T) {
 	testAddress := "localhost:9053"
-	_, err := rkserver.NewGRPCServer(testAddress, &config.ServerConfig{
+	_, err := NewGRPCServer(testAddress, &config.ServerConfig{
 		SecOpts: &config.TLSConfig{
 			UseTLS:            true,
 			Key:               util.GetTLSPath("server.key"),

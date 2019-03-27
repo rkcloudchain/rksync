@@ -4,35 +4,76 @@ Copyright Rockontrol Corp. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package channel
+package gossip
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/config"
-	"github.com/rkcloudchain/rksync/gossip"
-	"github.com/rkcloudchain/rksync/tests/runner"
+	"github.com/rkcloudchain/rksync/server"
+	"github.com/rkcloudchain/rksync/tests/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
+var idCfg1 *config.IdentityConfig
+var idCfg2 *config.IdentityConfig
+
+func TestMain(m *testing.M) {
+	home1, err := filepath.Abs("../tests/fixtures/identity/peer0")
+	if err != nil {
+		fmt.Printf("Abs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	idCfg1 = &config.IdentityConfig{
+		ID:      "peer0.org1",
+		HomeDir: home1,
+	}
+	err = idCfg1.MakeFilesAbs()
+	if err != nil {
+		fmt.Printf("MakeFilesAbs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	home2, err := filepath.Abs("../tests/fixtures/identity/peer1")
+	if err != nil {
+		fmt.Printf("Abs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	idCfg2 = &config.IdentityConfig{
+		ID:      "peer1.org2",
+		HomeDir: home2,
+	}
+	err = idCfg2.MakeFilesAbs()
+	if err != nil {
+		fmt.Printf("MakeFilesAbs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	os.Exit(m.Run())
+}
+
 func TestChannelInit(t *testing.T) {
-	selfIdentity1, _ := runner.GetIdentity(runner.GetOrg1IdentityConfig())
-	selfIdentity2, _ := runner.GetIdentity(runner.GetOrg2IdentityConfig())
+	selfIdentity1, _ := util.GetIdentity(idCfg1)
+	selfIdentity2, _ := util.GetIdentity(idCfg2)
 
-	srv1, _ := runner.CreateGRPCServer("localhost:9053")
-	srv2, _ := runner.CreateGRPCServer("localhost:10053")
+	srv1, _ := CreateGRPCServer("localhost:9053")
+	srv2, _ := CreateGRPCServer("localhost:10053")
 
-	gossipSvc1, err := gossip.NewGossipService(runner.DefaultGossipConfig("localhost:9053"), runner.GetOrg1IdentityConfig(), srv1.Server(), selfIdentity1, secureDialOpts)
+	gossipSvc1, err := NewGossipService(util.DefaultGossipConfig("localhost:9053"), idCfg1, srv1.Server(), selfIdentity1, secureDialOpts)
 	require.NoError(t, err)
 	go srv1.Start()
 	defer gossipSvc1.Stop()
 
-	gossipSvc2, err := gossip.NewGossipService(runner.DefaultGossipConfig("localhost:10053"), runner.GetOrg2IdentityConfig(), srv2.Server(), selfIdentity2, secureDialOpts)
+	gossipSvc2, err := NewGossipService(util.DefaultGossipConfig("localhost:10053"), idCfg2, srv2.Server(), selfIdentity2, secureDialOpts)
 	require.NoError(t, err)
 	go srv2.Start()
 	defer gossipSvc2.Stop()
@@ -73,4 +114,11 @@ func secureDialOpts() []grpc.DialOption {
 	dialOpts = append(dialOpts, grpc.WithInsecure())
 
 	return dialOpts
+}
+
+// CreateGRPCServer creates a new grpc server
+func CreateGRPCServer(address string) (*server.GRPCServer, error) {
+	return server.NewGRPCServer(address, &config.ServerConfig{
+		SecOpts: &config.TLSConfig{UseTLS: false},
+	})
 }

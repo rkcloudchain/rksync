@@ -9,21 +9,64 @@ package discovery
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/rkcloudchain/rksync/common"
-	"github.com/rkcloudchain/rksync/discovery"
+	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/filter"
 	"github.com/rkcloudchain/rksync/identity"
 	"github.com/rkcloudchain/rksync/protos"
 	"github.com/rkcloudchain/rksync/rpc"
-	"github.com/rkcloudchain/rksync/tests/runner"
+	"github.com/rkcloudchain/rksync/server"
+	"github.com/rkcloudchain/rksync/tests/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
-var noopPolicy = func(remotePeer *common.NetworkMember) (discovery.Sieve, discovery.EnvelopeFilter) {
+var idCfg1 *config.IdentityConfig
+var idCfg2 *config.IdentityConfig
+
+func TestMain(m *testing.M) {
+	home1, err := filepath.Abs("../tests/fixtures/identity/peer0")
+	if err != nil {
+		fmt.Printf("Abs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	idCfg1 = &config.IdentityConfig{
+		ID:      "peer0.org1",
+		HomeDir: home1,
+	}
+	err = idCfg1.MakeFilesAbs()
+	if err != nil {
+		fmt.Printf("MakeFilesAbs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	home2, err := filepath.Abs("../tests/fixtures/identity/peer1")
+	if err != nil {
+		fmt.Printf("Abs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	idCfg2 = &config.IdentityConfig{
+		ID:      "peer1.org2",
+		HomeDir: home2,
+	}
+	err = idCfg2.MakeFilesAbs()
+	if err != nil {
+		fmt.Printf("MakeFilesAbs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	os.Exit(m.Run())
+}
+
+var noopPolicy = func(remotePeer *common.NetworkMember) (Sieve, EnvelopeFilter) {
 	return func(msg *protos.SignedRKSyncMessage) bool {
 			return true
 		}, func(message *protos.SignedRKSyncMessage) *protos.Envelope {
@@ -32,25 +75,23 @@ var noopPolicy = func(remotePeer *common.NetworkMember) (discovery.Sieve, discov
 }
 
 func TestConnect(t *testing.T) {
-	cfg1 := runner.GetOrg1IdentityConfig()
-	cfg2 := runner.GetOrg2IdentityConfig()
 
-	selfIdentity1, err := runner.GetIdentity(cfg1)
+	selfIdentity1, err := util.GetIdentity(idCfg1)
 	require.NoError(t, err)
-	selfIdentity2, err := runner.GetIdentity(cfg2)
+	selfIdentity2, err := util.GetIdentity(idCfg2)
 	require.NoError(t, err)
 
-	idMapper1, err := identity.NewIdentity(cfg1, selfIdentity1, func(_ common.PKIidType) {})
+	idMapper1, err := identity.NewIdentity(idCfg1, selfIdentity1, func(_ common.PKIidType) {})
 	require.NoError(t, err)
-	idMapper2, err := identity.NewIdentity(cfg2, selfIdentity2, func(_ common.PKIidType) {})
+	idMapper2, err := identity.NewIdentity(idCfg2, selfIdentity2, func(_ common.PKIidType) {})
 	require.NoError(t, err)
 
-	rpc1, grpc1, err := runner.CreateRPCServerWithIdentity("localhost:9053", selfIdentity1, idMapper1)
+	rpc1, grpc1, err := CreateRPCServerWithIdentity("localhost:9053", selfIdentity1, idMapper1)
 	require.NoError(t, err)
 	go grpc1.Start()
 	defer rpc1.Stop()
 
-	rpc2, grpc2, err := runner.CreateRPCServerWithIdentity("localhost:10053", selfIdentity2, idMapper2)
+	rpc2, grpc2, err := CreateRPCServerWithIdentity("localhost:10053", selfIdentity2, idMapper2)
 	require.NoError(t, err)
 	go grpc2.Start()
 	defer rpc2.Stop()
@@ -77,8 +118,8 @@ func TestConnect(t *testing.T) {
 			}
 		},
 	}
-	disc1 := discovery.NewDiscoveryService(self1, mockRPC1, &mockCryptoService{idMapper1}, noopPolicy)
-	disc2 := discovery.NewDiscoveryService(self2, mockRPC2, &mockCryptoService{idMapper2}, noopPolicy)
+	disc1 := NewDiscoveryService(self1, mockRPC1, &mockCryptoService{idMapper1}, noopPolicy)
+	disc2 := NewDiscoveryService(self2, mockRPC2, &mockCryptoService{idMapper2}, noopPolicy)
 	defer disc1.Stop()
 	defer disc2.Stop()
 
@@ -195,4 +236,20 @@ func (m *mockCryptoService) ValidateAliveMsg(message *protos.SignedRKSyncMessage
 		return false
 	}
 	return true
+}
+
+// CreateRPCServerWithIdentity creates rpc server
+func CreateRPCServerWithIdentity(address string, selfIdentity common.PeerIdentityType, idMapper identity.Identity) (*rpc.Server, *server.GRPCServer, error) {
+	srv, err := server.NewGRPCServer(address, &config.ServerConfig{
+		SecOpts: &config.TLSConfig{UseTLS: false},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rpcSrv := rpc.NewServer(srv.Server(), idMapper, selfIdentity, func() []grpc.DialOption {
+		return []grpc.DialOption{grpc.WithInsecure()}
+	})
+
+	return rpcSrv, srv, nil
 }

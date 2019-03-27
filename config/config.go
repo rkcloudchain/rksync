@@ -173,6 +173,9 @@ func (c *IdentityConfig) setupIntermediateCAs() error {
 
 	fi, err := os.Stat(caCertsDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	if !fi.IsDir() {
