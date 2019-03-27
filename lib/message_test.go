@@ -9,6 +9,7 @@ package lib
 
 import (
 	"math/rand"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -126,8 +127,9 @@ func TestMessageAdd(t *testing.T) {
 
 func TestExpiration(t *testing.T) {
 	expired := make([]int, 0)
+	lock := sync.Mutex{}
 
-	msgStore := NewMessageStoreExpirable(nonReplaceInts, Noop, time.Second*3, nil, nil, func(m interface{}) {
+	msgStore := NewMessageStoreExpirable(nonReplaceInts, Noop, time.Second*3, lock.Lock, lock.Unlock, func(m interface{}) {
 		expired = append(expired, m.(int))
 	})
 
@@ -159,12 +161,18 @@ func TestExpiration(t *testing.T) {
 	}
 
 	assert.Equal(t, 10, msgStore.Size())
+
+	lock.Lock()
 	assert.Equal(t, 10, len(expired))
+	lock.Unlock()
 
 	time.Sleep(4 * time.Second)
 
 	assert.Equal(t, 0, msgStore.Size())
+
+	lock.Lock()
 	assert.Equal(t, 20, len(expired))
+	lock.Unlock()
 
 	for i := 0; i < 10; i++ {
 		assert.True(t, msgStore.CheckValid(i))

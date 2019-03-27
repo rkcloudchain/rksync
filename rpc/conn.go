@@ -278,6 +278,7 @@ func (conn *connection) writeToStream() {
 		select {
 		case m := <-conn.outBuff:
 			err := stream.Send(m.envelope)
+
 			if err != nil {
 				go m.onErr(err)
 				return
@@ -333,6 +334,10 @@ func (conn *connection) readFromStream(errChan chan error, quit chan struct{}, m
 func (conn *connection) getStream() stream {
 	conn.Lock()
 	defer conn.Unlock()
+
+	if conn.toDie() {
+		return nil
+	}
 
 	if conn.clientStream != nil && conn.serverStream != nil {
 		e := errors.New("Both client and server stream are not nil, something went wrong")

@@ -431,9 +431,12 @@ func (g *gossipService) isInChannel(m protos.ReceivedMessage) bool {
 }
 
 func (g *gossipService) forwardDiscoveryMsg(msg protos.ReceivedMessage) {
+	g.discAdapter.RLock()
+	defer g.discAdapter.RUnlock()
 	if g.discAdapter.toDie() {
 		return
 	}
+
 	g.discAdapter.incChan <- msg
 }
 
@@ -566,10 +569,14 @@ type discoveryAdapter struct {
 	gossipFunc       func(message *protos.SignedRKSyncMessage)
 	forwardFunc      func(message protos.ReceivedMessage)
 	disclosurePolicy discovery.DisclosurePolicy
+	sync.RWMutex
 }
 
 func (da *discoveryAdapter) close() {
 	atomic.StoreInt32(&da.stopping, int32(1))
+
+	da.Lock()
+	defer da.Unlock()
 	close(da.incChan)
 }
 
@@ -578,6 +585,8 @@ func (da *discoveryAdapter) toDie() bool {
 }
 
 func (da *discoveryAdapter) Gossip(msg *protos.SignedRKSyncMessage) {
+	da.RLock()
+	defer da.RUnlock()
 	if da.toDie() {
 		return
 	}
@@ -586,6 +595,8 @@ func (da *discoveryAdapter) Gossip(msg *protos.SignedRKSyncMessage) {
 }
 
 func (da *discoveryAdapter) Forward(msg protos.ReceivedMessage) {
+	da.RLock()
+	defer da.RUnlock()
 	if da.toDie() {
 		return
 	}
@@ -594,6 +605,8 @@ func (da *discoveryAdapter) Forward(msg protos.ReceivedMessage) {
 }
 
 func (da *discoveryAdapter) SendToPeer(peer *common.NetworkMember, msg *protos.SignedRKSyncMessage) {
+	da.RLock()
+	defer da.RUnlock()
 	if da.toDie() {
 		return
 	}

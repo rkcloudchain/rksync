@@ -25,16 +25,16 @@ func TestSendWithAck(t *testing.T) {
 	inc1 := inst1.Accept(acceptor)
 	inc2 := inst2.Accept(acceptor)
 
-	inst1.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:10053", PKIID: []byte("localhost:10053")})
+	inst1.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
 	<-inc2
 
 	msgNum := 1000
 	for i := 0; i < msgNum; i++ {
-		go inst1.SendWithAck(createRKSyncMessage(), time.Second*5, 1, &common.NetworkMember{Endpoint: "localhost:10053", PKIID: []byte("localhost:10053")})
+		go inst1.SendWithAck(createRKSyncMessage(), time.Second*5, 1, &common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
 	}
 
 	for i := 0; i < msgNum; i++ {
-		go inst2.SendWithAck(createRKSyncMessage(), time.Second*5, 1, &common.NetworkMember{Endpoint: "localhost:9053", PKIID: []byte("localhost:9053")})
+		go inst2.SendWithAck(createRKSyncMessage(), time.Second*5, 1, &common.NetworkMember{Endpoint: "localhost:9053", PKIID: inst1.GetPKIid()})
 	}
 
 	go func() {
@@ -52,7 +52,7 @@ func TestSendWithAck(t *testing.T) {
 
 func TestGetConnectionInfo(t *testing.T) {
 	m1 := inst1.Accept(func(o interface{}) bool { return true })
-	inst2.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:9053", PKIID: []byte("localhost:9053")})
+	inst2.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:9053", PKIID: inst1.GetPKIid()})
 	select {
 	case <-time.After(time.Second * 5):
 		t.Fatal("Didn't receive a message in time")
@@ -63,7 +63,7 @@ func TestGetConnectionInfo(t *testing.T) {
 }
 
 func TestHandshake(t *testing.T) {
-	_, err := inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: []byte("localhost:10053")})
+	_, err := inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst1.GetPKIid()})
 	assert.Error(t, err, "PKI-ID of remote peer doesn't match expected PKI-ID")
 
 	id, err := inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
@@ -78,7 +78,7 @@ func TestHandshake(t *testing.T) {
 func TestNonResponsivePing(t *testing.T) {
 	s := make(chan error)
 	go func() {
-		err := inst1.Probe(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: []byte("localhost:10053")})
+		err := inst1.Probe(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
 		s <- err
 	}()
 
