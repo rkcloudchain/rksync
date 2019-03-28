@@ -97,9 +97,8 @@ func Serve(l net.Listener, cfg *config.Config) (*Server, error) {
 	}
 
 	go func() {
-		var grpcErr error
-		if grpcErr = grpcServer.Start(); grpcErr != nil {
-			grpcErr = errors.Errorf("grpc server exited with error: %s", grpcErr)
+		if err := grpcServer.Start(); err != nil {
+			logging.Errorf("grpc server exited with error: %s", err)
 		} else {
 			logging.Info("RKSycn server exited")
 		}
