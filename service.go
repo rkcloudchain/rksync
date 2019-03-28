@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -34,8 +33,8 @@ var (
 	maxLength           = 249
 )
 
-// New creates a rksync service instance
-func New(cfg *config.Config) (*SyncService, error) {
+// Serve creates a rksync service instance
+func Serve(l net.Listener, cfg *config.Config) (*Server, error) {
 	if cfg.HomeDir == "" {
 		cfg.HomeDir = config.DefaultHomeDir
 	}
@@ -49,7 +48,8 @@ func New(cfg *config.Config) (*SyncService, error) {
 	if err != nil {
 		return nil, err
 	}
-	srv := &SyncService{cfg: cfg}
+
+	srv := &Server{cfg: cfg}
 
 	srv.chainFilePath = filepath.Join(srv.cfg.HomeDir, "channels")
 	if s, err := os.Stat(srv.chainFilePath); err != nil {
@@ -64,7 +64,6 @@ func New(cfg *config.Config) (*SyncService, error) {
 		return nil, errors.Errorf("RKSync chain file path exists but not a dir: %s", srv.chainFilePath)
 	}
 
-	srv.listenAddr = getListenAddress(srv.cfg)
 	if srv.cfg.Server == nil {
 		srv.cfg.Server = &config.ServerConfig{
 			SecOpts: &config.TLSConfig{},
@@ -84,35 +83,19 @@ func New(cfg *config.Config) (*SyncService, error) {
 		return nil, errors.Errorf("Failed serializing self identity: %v", err)
 	}
 
-	return srv, nil
-}
-
-// SyncService encapsulates rksync component
-type SyncService struct {
-	gossip.Gossip
-	cfg           *config.Config
-	listenAddr    string
-	chainFilePath string
-	selfIdentity  common.PeerIdentityType
-	clientCreds   credentials.TransportCredentials
-}
-
-// Start starts rksync service
-func (srv *SyncService) Start() error {
-	grpcServer, err := server.NewGRPCServer(srv.listenAddr, srv.cfg.Server)
+	grpcServer, err := server.NewGRPCServerFromListener(l, srv.cfg.Server)
 	if err != nil {
 		logging.Errorf("Failed to create grpc server (%s)", err)
-		return err
+		return nil, err
 	}
 
-	srv.Gossip, err = gossip.NewGossipService(srv.cfg.Gossip, srv.cfg.Identity, grpcServer.Server(), srv.selfIdentity, func() []grpc.DialOption {
+	srv.gossip, err = gossip.NewGossipService(srv.cfg.Gossip, srv.cfg.Identity, grpcServer.Server(), srv.selfIdentity, func() []grpc.DialOption {
 		return srv.secureDialOpts(srv.cfg.Server)
 	})
 	if err != nil {
-		return errors.Errorf("Failed creating RKSync service (%s)", err)
+		return nil, errors.Errorf("Failed creating RKSync service (%s)", err)
 	}
 
-	serve := make(chan error)
 	go func() {
 		var grpcErr error
 		if grpcErr = grpcServer.Start(); grpcErr != nil {
@@ -120,37 +103,44 @@ func (srv *SyncService) Start() error {
 		} else {
 			logging.Info("RKSycn server exited")
 		}
-
-		serve <- grpcErr
 	}()
 
 	go srv.initializeChannel()
-	return <-serve
+	return srv, nil
+}
+
+// Server encapsulates rksync component
+type Server struct {
+	gossip        gossip.Gossip
+	cfg           *config.Config
+	chainFilePath string
+	selfIdentity  common.PeerIdentityType
+	clientCreds   credentials.TransportCredentials
 }
 
 // Stop the rksync service
-func (srv *SyncService) Stop() {
-	if srv.Gossip != nil {
-		srv.Stop()
+func (srv *Server) Stop() {
+	if srv.gossip != nil {
+		srv.gossip.Stop()
 	}
 }
 
 // CreateChannel creates a channel
-func (srv *SyncService) CreateChannel(chainID string, files []common.FileSyncInfo) error {
+func (srv *Server) CreateChannel(chainID string, files []common.FileSyncInfo) error {
 	logging.Debugf("Creating channel, ID: %s", chainID)
 
 	if err := validateChannelID(chainID); err != nil {
 		return errors.Errorf("Bad channel id: %s", err)
 	}
 
-	chainState, err := srv.Gossip.CreateChannel(chainID, files)
+	chainState, err := srv.gossip.CreateChannel(chainID, files)
 	if err != nil {
 		return err
 	}
 
 	err = srv.rewriteChainConfigFile(chainID, chainState)
 	if err != nil {
-		srv.CloseChannel(chainID)
+		srv.gossip.CloseChannel(chainID)
 		return err
 	}
 
@@ -158,7 +148,7 @@ func (srv *SyncService) CreateChannel(chainID string, files []common.FileSyncInf
 }
 
 // AddMemberToChan adds a member to the channel
-func (srv *SyncService) AddMemberToChan(chainID string, nodeID string, cert *x509.Certificate) error {
+func (srv *Server) AddMemberToChan(chainID string, nodeID string, cert *x509.Certificate) error {
 	if chainID == "" {
 		return errors.New("Channel ID must be provided")
 	}
@@ -169,12 +159,12 @@ func (srv *SyncService) AddMemberToChan(chainID string, nodeID string, cert *x50
 		return errors.New("Node certificate must be provided")
 	}
 
-	pkiID, err := srv.GetPKIidOfCert(nodeID, cert)
+	pkiID, err := srv.gossip.GetPKIidOfCert(nodeID, cert)
 	if err != nil {
 		return err
 	}
 
-	chainState, err := srv.Gossip.AddMemberToChan(chainID, pkiID)
+	chainState, err := srv.gossip.AddMemberToChan(chainID, pkiID)
 	if err != nil {
 		return err
 	}
@@ -183,7 +173,7 @@ func (srv *SyncService) AddMemberToChan(chainID string, nodeID string, cert *x50
 }
 
 // AddFileToChan adds a file to the channel
-func (srv *SyncService) AddFileToChan(chainID string, filepath string, filemode string) error {
+func (srv *Server) AddFileToChan(chainID string, filepath string, filemode string) error {
 	if chainID == "" {
 		return errors.New("Channel ID must be provided")
 	}
@@ -194,7 +184,7 @@ func (srv *SyncService) AddFileToChan(chainID string, filepath string, filemode 
 		return errors.New("File mode must be provided")
 	}
 
-	chainState, err := srv.Gossip.AddFileToChan(chainID, common.FileSyncInfo{Path: filepath, Mode: filemode})
+	chainState, err := srv.gossip.AddFileToChan(chainID, common.FileSyncInfo{Path: filepath, Mode: filemode})
 	if err != nil {
 		return err
 	}
@@ -202,7 +192,7 @@ func (srv *SyncService) AddFileToChan(chainID string, filepath string, filemode 
 	return srv.rewriteChainConfigFile(chainID, chainState)
 }
 
-func (srv *SyncService) initializeChannel() {
+func (srv *Server) initializeChannel() {
 	dirs, err := util.ListSubdirs(srv.chainFilePath)
 	if err != nil {
 		logging.Error(err.Error())
@@ -229,14 +219,14 @@ func (srv *SyncService) initializeChannel() {
 			continue
 		}
 
-		err = srv.InitializeChannel(dir, chainState)
+		err = srv.gossip.InitializeChannel(dir, chainState)
 		if err != nil {
 			logging.Errorf("Error initializing channel %s: %s", dir, err)
 		}
 	}
 }
 
-func (srv *SyncService) rewriteChainConfigFile(chainID string, chainState *protos.ChainState) error {
+func (srv *Server) rewriteChainConfigFile(chainID string, chainState *protos.ChainState) error {
 	dir := filepath.Join(srv.chainFilePath, chainID)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		err = os.MkdirAll(dir, 0755)
@@ -264,7 +254,7 @@ func (srv *SyncService) rewriteChainConfigFile(chainID string, chainState *proto
 	return nil
 }
 
-func (srv *SyncService) secureDialOpts(cfg *config.ServerConfig) []grpc.DialOption {
+func (srv *Server) secureDialOpts(cfg *config.ServerConfig) []grpc.DialOption {
 	var dialOpts []grpc.DialOption
 	dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(
 		grpc.MaxCallRecvMsgSize(config.MaxRecvMsgSize),
@@ -312,18 +302,6 @@ func serializeIdentity(cfg *config.IdentityConfig, homedir string) (common.PeerI
 	}
 
 	return idBytes, nil
-}
-
-func getListenAddress(cfg *config.Config) string {
-	if cfg.BindAddress == "" {
-		cfg.BindAddress = "0.0.0.0"
-	}
-	if cfg.BindPort == 0 {
-		cfg.BindPort = 8053
-	}
-
-	lisAddr := net.JoinHostPort(cfg.BindAddress, strconv.Itoa(cfg.BindPort))
-	return lisAddr
 }
 
 func validateChannelID(chainID string) error {

@@ -112,6 +112,9 @@ func (g *gossipService) SelfPKIid() common.PKIidType {
 }
 
 func (g *gossipService) Peers() []common.NetworkMember {
+	if g.toDie() {
+		return []common.NetworkMember{}
+	}
 	return g.disc.GetMembership()
 }
 
@@ -244,6 +247,7 @@ func (g *gossipService) Stop() {
 
 	atomic.StoreInt32(&g.stopFlag, int32(1))
 	logging.Info("Stopping gossip")
+	defer logging.Info("Stopped gossip")
 	g.discAdapter.close()
 	g.disc.Stop()
 	g.chanState.stop()

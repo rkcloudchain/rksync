@@ -215,6 +215,10 @@ func (d *gossipDiscoveryService) GetMembership() []common.NetworkMember {
 func (d *gossipDiscoveryService) Stop() {
 	defer logging.Info("Stopped")
 	logging.Info("Stopping")
+
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
 	atomic.StoreInt32(&d.toDieFlag, int32(1))
 	d.msgStore.Stop()
 	d.toDieChan <- struct{}{}
@@ -450,6 +454,7 @@ func (d *gossipDiscoveryService) handleMsgFromRPC(msg protos.ReceivedMessage) {
 			return
 		}
 		if !d.crypt.ValidateAliveMsg(selfInRKSyncMsg) {
+			logging.Warningf("Failed validating alive message: %+v", selfInRKSyncMsg)
 			return
 		}
 		if d.msgStore.CheckValid(selfInRKSyncMsg) {
@@ -503,7 +508,7 @@ func (d *gossipDiscoveryService) handleMsgFromRPC(msg protos.ReceivedMessage) {
 
 			newDeadMembers := []*protos.SignedRKSyncMessage{}
 			d.lock.RLock()
-			if _, known := d.id2Member[string(dm.GetAliveMsg().Membership.PkiId)]; !known {
+			if _, known := d.id2Member[string(common.PKIidType(dm.GetAliveMsg().Membership.PkiId))]; !known {
 				newDeadMembers = append(newDeadMembers, dm)
 			}
 			d.lock.RUnlock()
@@ -520,7 +525,7 @@ func (d *gossipDiscoveryService) handleAliveMessage(m *protos.SignedRKSyncMessag
 		return
 	}
 
-	pkiID := m.GetAliveMsg().Membership.PkiId
+	pkiID := common.PKIidType(m.GetAliveMsg().Membership.PkiId)
 	ts := m.GetAliveMsg().Timestamp
 
 	d.lock.RLock()
@@ -630,20 +635,20 @@ func (d *gossipDiscoveryService) learnExistingMembers(aliveArr []*protos.SignedR
 		}
 		logging.Debug("updating", am)
 
-		member := d.id2Member[string(am.Membership.PkiId)]
+		member := d.id2Member[string(common.PKIidType(am.Membership.PkiId))]
 		member.Endpoint = am.Membership.Endpoint
 
-		if _, isKnownAsDead := d.deadLastTS[string(am.Membership.PkiId)]; isKnownAsDead {
+		if _, isKnownAsDead := d.deadLastTS[string(common.PKIidType(am.Membership.PkiId))]; isKnownAsDead {
 			logging.Warning(am.Membership, "has already expired")
 			continue
 		}
 
-		if _, isKnownAsAlive := d.aliveLastTS[string(am.Membership.PkiId)]; !isKnownAsAlive {
+		if _, isKnownAsAlive := d.aliveLastTS[string(common.PKIidType(am.Membership.PkiId))]; !isKnownAsAlive {
 			logging.Warning(am.Membership, "has already expired")
 			continue
 		} else {
 			logging.Debug("Updating aliveness data:", am)
-			alive := d.aliveLastTS[string(am.Membership.PkiId)]
+			alive := d.aliveLastTS[string(common.PKIidType(am.Membership.PkiId))]
 			alive.incTime = tsToTime(am.Timestamp.IncNum)
 			alive.lastSeen = time.Now()
 			alive.seqNum = am.Timestamp.SeqNum
@@ -669,18 +674,18 @@ func (d *gossipDiscoveryService) resurrectMember(am *protos.SignedRKSyncMessage,
 
 	member := am.GetAliveMsg().Membership
 	pkiID := member.PkiId
-	d.aliveLastTS[string(pkiID)] = &timestamp{
+	d.aliveLastTS[string(common.PKIidType(pkiID))] = &timestamp{
 		lastSeen: time.Now(),
 		seqNum:   t.SeqNum,
 		incTime:  tsToTime(t.IncNum),
 	}
 
-	d.id2Member[string(pkiID)] = &common.NetworkMember{
+	d.id2Member[string(common.PKIidType(pkiID))] = &common.NetworkMember{
 		Endpoint: member.Endpoint,
 		PKIID:    member.PkiId,
 	}
 
-	delete(d.deadLastTS, string(pkiID))
+	delete(d.deadLastTS, string(common.PKIidType(pkiID)))
 	d.deadMembership.Remove(common.PKIidType(pkiID))
 	d.aliveMembership.Put(common.PKIidType(pkiID), &protos.SignedRKSyncMessage{RKSyncMessage: am.RKSyncMessage, Envelope: am.Envelope})
 }
@@ -696,7 +701,7 @@ func (d *gossipDiscoveryService) learnNewMembers(aliveMembers []*protos.SignedRK
 		if equalPKIid(am.GetAliveMsg().Membership.PkiId, d.self.PKIID) {
 			continue
 		}
-		d.aliveLastTS[string(am.GetAliveMsg().Membership.PkiId)] = &timestamp{
+		d.aliveLastTS[string(common.PKIidType(am.GetAliveMsg().Membership.PkiId))] = &timestamp{
 			incTime:  tsToTime(am.GetAliveMsg().Timestamp.IncNum),
 			lastSeen: time.Now(),
 			seqNum:   am.GetAliveMsg().Timestamp.SeqNum,
@@ -710,7 +715,7 @@ func (d *gossipDiscoveryService) learnNewMembers(aliveMembers []*protos.SignedRK
 		if equalPKIid(dm.GetAliveMsg().Membership.PkiId, d.self.PKIID) {
 			continue
 		}
-		d.deadLastTS[string(dm.GetAliveMsg().Membership.PkiId)] = &timestamp{
+		d.deadLastTS[string(common.PKIidType(dm.GetAliveMsg().Membership.PkiId))] = &timestamp{
 			incTime:  tsToTime(dm.GetAliveMsg().Timestamp.IncNum),
 			lastSeen: time.Now(),
 			seqNum:   dm.GetAliveMsg().Timestamp.SeqNum,
@@ -728,7 +733,7 @@ func (d *gossipDiscoveryService) learnNewMembers(aliveMembers []*protos.SignedRK
 				return
 			}
 
-			d.id2Member[string(member.Membership.PkiId)] = &common.NetworkMember{
+			d.id2Member[string(common.PKIidType(member.Membership.PkiId))] = &common.NetworkMember{
 				Endpoint: member.Membership.Endpoint,
 				PKIID:    member.Membership.PkiId,
 			}
@@ -840,9 +845,9 @@ func newAliveMsgStore(d *gossipDiscoveryService) *aliveMsgStore {
 		id := msg.GetAliveMsg().Membership.PkiId
 		d.aliveMembership.Remove(id)
 		d.deadMembership.Remove(id)
-		delete(d.id2Member, string(id))
-		delete(d.deadLastTS, string(id))
-		delete(d.aliveLastTS, string(id))
+		delete(d.id2Member, string(common.PKIidType(id)))
+		delete(d.deadLastTS, string(common.PKIidType(id)))
+		delete(d.aliveLastTS, string(common.PKIidType(id)))
 	}
 
 	s := &aliveMsgStore{

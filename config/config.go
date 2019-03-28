@@ -48,12 +48,10 @@ var (
 
 // Config defines the parameters for rksync
 type Config struct {
-	BindAddress string // Address we bind to
-	BindPort    int    // Port we bind to
-	HomeDir     string // The service's home directory
-	Gossip      *GossipConfig
-	Identity    *IdentityConfig
-	Server      *ServerConfig
+	HomeDir  string // The service's home directory
+	Gossip   *GossipConfig
+	Identity *IdentityConfig
+	Server   *ServerConfig
 }
 
 // GossipConfig is the configuration of the rksync component
