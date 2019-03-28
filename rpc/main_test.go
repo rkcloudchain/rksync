@@ -37,10 +37,9 @@ func TestMain(m *testing.M) {
 	}
 
 	cfg1 := &config.IdentityConfig{
-		ID:      "peer0.org1",
-		HomeDir: home1,
+		ID: "peer0.org1",
 	}
-	err = cfg1.MakeFilesAbs()
+	err = cfg1.MakeFilesAbs(home1)
 	if err != nil {
 		fmt.Printf("MakeFilesAbs failed: %s\n", err)
 		os.Exit(-1)
@@ -58,10 +57,9 @@ func TestMain(m *testing.M) {
 	}
 
 	cfg2 := &config.IdentityConfig{
-		ID:      "peer1.org2",
-		HomeDir: home2,
+		ID: "peer1.org2",
 	}
-	err = cfg2.MakeFilesAbs()
+	err = cfg2.MakeFilesAbs(home2)
 	if err != nil {
 		fmt.Printf("MakeFilesAbs failed: %s\n", err)
 		os.Exit(-1)

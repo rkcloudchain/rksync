@@ -43,17 +43,17 @@ var (
 	}
 	// default connection timeout
 	DefaultConnectionTimeout = 5 * time.Second
-	DefaultFileSystemPath    = "/var/rksync/production"
+	DefaultHomeDir           = "/var/rksync/production"
 )
 
 // Config defines the parameters for rksync
 type Config struct {
-	BindAddress    string // Address we bind to
-	BindPort       int    // Port we bind to
-	FileSystemPath string // Path on the file system where rksync will store data.
-	Gossip         *GossipConfig
-	Identity       *IdentityConfig
-	Server         *ServerConfig
+	BindAddress string // Address we bind to
+	BindPort    int    // Port we bind to
+	HomeDir     string // The service's home directory
+	Gossip      *GossipConfig
+	Identity    *IdentityConfig
+	Server      *ServerConfig
 }
 
 // GossipConfig is the configuration of the rksync component
@@ -74,9 +74,9 @@ type GossipConfig struct {
 
 // IdentityConfig defines the identity parameters for peer
 type IdentityConfig struct {
-	ID      string // ID of this instance
-	HomeDir string
+	ID string // ID of this instance
 
+	keyStoreDir         string
 	certFile            string
 	rootCAFiles         []string
 	intermediateCAFiles []string
@@ -85,6 +85,11 @@ type IdentityConfig struct {
 // GetCertificate returns the certificate file associated with the configuration
 func (c *IdentityConfig) GetCertificate() string {
 	return c.certFile
+}
+
+// GetKeyStoreDir returns the key store directory
+func (c *IdentityConfig) GetKeyStoreDir() string {
+	return c.keyStoreDir
 }
 
 // GetRootCACerts returns the root ca certificate files associated with the configuration
@@ -98,27 +103,29 @@ func (c *IdentityConfig) GetIntermediateCACerts() []string {
 }
 
 // MakeFilesAbs makes files absolute relative to 'HomeDir' if not already absolute
-func (c *IdentityConfig) MakeFilesAbs() error {
-	if c.HomeDir == "" {
+func (c *IdentityConfig) MakeFilesAbs(homedir string) error {
+	if homedir == "" {
 		return errors.New("HomeDir must be provided")
 	}
 
-	err := c.setupCertificate()
+	c.keyStoreDir = filepath.Join(homedir, "csp", "keystore")
+
+	err := c.setupCertificate(homedir)
 	if err != nil {
 		return err
 	}
 
-	err = c.setupRootCAs()
+	err = c.setupRootCAs(homedir)
 	if err != nil {
 		return err
 	}
 
-	return c.setupIntermediateCAs()
+	return c.setupIntermediateCAs(homedir)
 }
 
-func (c *IdentityConfig) setupCertificate() error {
+func (c *IdentityConfig) setupCertificate(homedir string) error {
 	var err error
-	c.certFile, err = util.MakeFileAbs("csp/signcerts/cert.pem", c.HomeDir)
+	c.certFile, err = util.MakeFileAbs("csp/signcerts/cert.pem", homedir)
 	if err != nil {
 		return err
 	}
@@ -128,8 +135,8 @@ func (c *IdentityConfig) setupCertificate() error {
 	return nil
 }
 
-func (c *IdentityConfig) setupRootCAs() error {
-	rootCACertsDir, err := util.MakeFileAbs("csp/cacerts", c.HomeDir)
+func (c *IdentityConfig) setupRootCAs(homedir string) error {
+	rootCACertsDir, err := util.MakeFileAbs("csp/cacerts", homedir)
 	if err != nil {
 		return err
 	}
@@ -165,8 +172,8 @@ func (c *IdentityConfig) setupRootCAs() error {
 	return nil
 }
 
-func (c *IdentityConfig) setupIntermediateCAs() error {
-	caCertsDir, err := util.MakeFileAbs("csp/intermediatecerts", c.HomeDir)
+func (c *IdentityConfig) setupIntermediateCAs(homedir string) error {
+	caCertsDir, err := util.MakeFileAbs("csp/intermediatecerts", homedir)
 	if err != nil {
 		return err
 	}

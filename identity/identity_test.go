@@ -25,10 +25,9 @@ func TestVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.IdentityConfig{
-		ID:      "peer0.org1",
-		HomeDir: home,
+		ID: "peer0.org1",
 	}
-	err = cfg.MakeFilesAbs()
+	err = cfg.MakeFilesAbs(home)
 	require.NoError(t, err)
 
 	selfIdentity, err := util.GetIdentity(cfg)
@@ -50,10 +49,9 @@ func TestGet(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.IdentityConfig{
-		ID:      "peer0.org1",
-		HomeDir: home,
+		ID: "peer0.org1",
 	}
-	err = cfg.MakeFilesAbs()
+	err = cfg.MakeFilesAbs(home)
 	require.NoError(t, err)
 
 	selfIdentity, err := util.GetIdentity(cfg)

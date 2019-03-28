@@ -12,11 +12,9 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"syscall"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
@@ -32,61 +30,87 @@ import (
 )
 
 var (
-	rkSyncSvc           gossip.Gossip
-	clientCreds         credentials.TransportCredentials
-	fileSystemPath      string
 	channelAllowedChars = "[a-z][a-z0-9.-]*"
 	maxLength           = 249
 )
 
-// InitRKSyncService initialize rksync service
-func InitRKSyncService(cfg config.Config) error {
-	if cfg.FileSystemPath == "" {
-		cfg.FileSystemPath = config.DefaultFileSystemPath
+// New creates a rksync service instance
+func New(cfg *config.Config) (*SyncService, error) {
+	if cfg.HomeDir == "" {
+		cfg.HomeDir = config.DefaultHomeDir
 	}
-	if s, err := os.Stat(cfg.FileSystemPath); err != nil {
+	if cfg.Gossip == nil {
+		return nil, errors.New("Gossip configuration cannot be nil")
+	}
+	if cfg.Identity == nil {
+		return nil, errors.New("Identity configuration cannot be nil")
+	}
+	err := validateGossipConfig(cfg.Gossip)
+	if err != nil {
+		return nil, err
+	}
+	srv := &SyncService{cfg: cfg}
+
+	srv.chainFilePath = filepath.Join(srv.cfg.HomeDir, "channels")
+	if s, err := os.Stat(srv.chainFilePath); err != nil {
 		if os.IsNotExist(err) {
-			if err := os.MkdirAll(cfg.FileSystemPath, 0755); err != nil {
-				return errors.Errorf("Could not create rksync store data path: %s", err)
+			if err := os.MkdirAll(srv.chainFilePath, 0755); err != nil {
+				return nil, errors.Errorf("Could not create chain file path: %s", err)
 			}
 		} else {
-			return errors.Errorf("Could not stat rksync store data path: %s", err)
+			return nil, errors.Errorf("Could not stat chain file path: %s", err)
 		}
 	} else if !s.IsDir() {
-		return errors.Errorf("RKSync store data path exists but not a dir: %s", cfg.FileSystemPath)
+		return nil, errors.Errorf("RKSync chain file path exists but not a dir: %s", srv.chainFilePath)
 	}
-	fileSystemPath = cfg.FileSystemPath
 
-	listenAddr := getListenAddress(&cfg)
-	grpcServer, err := server.NewGRPCServer(listenAddr, cfg.Server)
+	srv.listenAddr = getListenAddress(srv.cfg)
+	if srv.cfg.Server == nil {
+		srv.cfg.Server = &config.ServerConfig{
+			SecOpts: &config.TLSConfig{},
+			KaOpts:  &config.KeepaliveConfig{},
+		}
+	}
+
+	if cfg.Server.SecOpts.UseTLS {
+		srv.clientCreds, err = clientTransportCredentials(srv.cfg)
+		if err != nil {
+			return nil, errors.Errorf("Failed to set TLS client certificate (%s)", err)
+		}
+	}
+
+	srv.selfIdentity, err = serializeIdentity(cfg.Identity, cfg.HomeDir)
+	if err != nil {
+		return nil, errors.Errorf("Failed serializing self identity: %v", err)
+	}
+
+	return srv, nil
+}
+
+// SyncService encapsulates rksync component
+type SyncService struct {
+	gossip.Gossip
+	cfg           *config.Config
+	listenAddr    string
+	chainFilePath string
+	selfIdentity  common.PeerIdentityType
+	clientCreds   credentials.TransportCredentials
+}
+
+// Start starts rksync service
+func (srv *SyncService) Start() error {
+	grpcServer, err := server.NewGRPCServer(srv.listenAddr, srv.cfg.Server)
 	if err != nil {
 		logging.Errorf("Failed to create grpc server (%s)", err)
 		return err
 	}
 
-	if cfg.Server.SecOpts.UseTLS {
-		clientCreds, err = clientTransportCredentials(&cfg)
-		if err != nil {
-			return errors.Errorf("Failed to set TLS client certificate (%s)", err)
-		}
-	}
-
-	serializedIdentity, err := serializeIdentity(cfg.Identity)
-	if err != nil {
-		return errors.Errorf("Failed serializing self identity: %v", err)
-	}
-
-	err = validateGossipConfig(&cfg)
-	if err != nil {
-		return err
-	}
-	rkSyncSvc, err = gossip.NewGossipService(cfg.Gossip, cfg.Identity, grpcServer.Server(), serializedIdentity, func() []grpc.DialOption {
-		return secureDialOpts(&cfg)
+	srv.Gossip, err = gossip.NewGossipService(srv.cfg.Gossip, srv.cfg.Identity, grpcServer.Server(), srv.selfIdentity, func() []grpc.DialOption {
+		return srv.secureDialOpts(srv.cfg.Server)
 	})
 	if err != nil {
 		return errors.Errorf("Failed creating RKSync service (%s)", err)
 	}
-	defer rkSyncSvc.Stop()
 
 	serve := make(chan error)
 	go func() {
@@ -100,34 +124,33 @@ func InitRKSyncService(cfg config.Config) error {
 		serve <- grpcErr
 	}()
 
-	go initializeChannel()
-	go handleSignals(map[os.Signal]func(){
-		syscall.SIGINT:  func() { serve <- nil },
-		syscall.SIGTERM: func() { serve <- nil },
-	})
-
+	go srv.initializeChannel()
 	return <-serve
 }
 
-// CreateChannel creates a channel
-func CreateChannel(chainID string, files []common.FileSyncInfo) error {
-	logging.Debugf("Creating channel, ID: %s", chainID)
-	if rkSyncSvc == nil {
-		return errors.New("You need initialize RKSync service first")
+// Stop the rksync service
+func (srv *SyncService) Stop() {
+	if srv.Gossip != nil {
+		srv.Stop()
 	}
+}
+
+// CreateChannel creates a channel
+func (srv *SyncService) CreateChannel(chainID string, files []common.FileSyncInfo) error {
+	logging.Debugf("Creating channel, ID: %s", chainID)
 
 	if err := validateChannelID(chainID); err != nil {
 		return errors.Errorf("Bad channel id: %s", err)
 	}
 
-	chainState, err := rkSyncSvc.CreateChannel(chainID, files)
+	chainState, err := srv.Gossip.CreateChannel(chainID, files)
 	if err != nil {
 		return err
 	}
 
-	err = rewriteChainConfigFile(chainID, chainState)
+	err = srv.rewriteChainConfigFile(chainID, chainState)
 	if err != nil {
-		rkSyncSvc.CloseChannel(chainID)
+		srv.CloseChannel(chainID)
 		return err
 	}
 
@@ -135,7 +158,7 @@ func CreateChannel(chainID string, files []common.FileSyncInfo) error {
 }
 
 // AddMemberToChan adds a member to the channel
-func AddMemberToChan(chainID string, nodeID string, cert *x509.Certificate) error {
+func (srv *SyncService) AddMemberToChan(chainID string, nodeID string, cert *x509.Certificate) error {
 	if chainID == "" {
 		return errors.New("Channel ID must be provided")
 	}
@@ -146,21 +169,21 @@ func AddMemberToChan(chainID string, nodeID string, cert *x509.Certificate) erro
 		return errors.New("Node certificate must be provided")
 	}
 
-	pkiID, err := rkSyncSvc.GetPKIidOfCert(nodeID, cert)
+	pkiID, err := srv.GetPKIidOfCert(nodeID, cert)
 	if err != nil {
 		return err
 	}
 
-	chainState, err := rkSyncSvc.AddMemberToChan(chainID, pkiID)
+	chainState, err := srv.Gossip.AddMemberToChan(chainID, pkiID)
 	if err != nil {
 		return err
 	}
 
-	return rewriteChainConfigFile(chainID, chainState)
+	return srv.rewriteChainConfigFile(chainID, chainState)
 }
 
 // AddFileToChan adds a file to the channel
-func AddFileToChan(chainID string, filepath string, filemode string) error {
+func (srv *SyncService) AddFileToChan(chainID string, filepath string, filemode string) error {
 	if chainID == "" {
 		return errors.New("Channel ID must be provided")
 	}
@@ -171,23 +194,23 @@ func AddFileToChan(chainID string, filepath string, filemode string) error {
 		return errors.New("File mode must be provided")
 	}
 
-	chainState, err := rkSyncSvc.AddFileToChan(chainID, common.FileSyncInfo{Path: filepath, Mode: filemode})
+	chainState, err := srv.Gossip.AddFileToChan(chainID, common.FileSyncInfo{Path: filepath, Mode: filemode})
 	if err != nil {
 		return err
 	}
 
-	return rewriteChainConfigFile(chainID, chainState)
+	return srv.rewriteChainConfigFile(chainID, chainState)
 }
 
-func initializeChannel() {
-	dirs, err := util.ListSubdirs(fileSystemPath)
+func (srv *SyncService) initializeChannel() {
+	dirs, err := util.ListSubdirs(srv.chainFilePath)
 	if err != nil {
 		logging.Error(err.Error())
 		return
 	}
 
 	for _, dir := range dirs {
-		path := filepath.Join(fileSystemPath, dir, "config.pb")
+		path := filepath.Join(srv.chainFilePath, dir, "config.pb")
 		if _, err := os.Stat(path); err != nil {
 			logging.Errorf("Error reading channel %s config file: %s", dir, err)
 			continue
@@ -206,15 +229,15 @@ func initializeChannel() {
 			continue
 		}
 
-		err = rkSyncSvc.InitializeChannel(dir, chainState)
+		err = srv.InitializeChannel(dir, chainState)
 		if err != nil {
 			logging.Errorf("Error initializing channel %s: %s", dir, err)
 		}
 	}
 }
 
-func rewriteChainConfigFile(chainID string, chainState *protos.ChainState) error {
-	dir := filepath.Join(fileSystemPath, chainID)
+func (srv *SyncService) rewriteChainConfigFile(chainID string, chainState *protos.ChainState) error {
+	dir := filepath.Join(srv.chainFilePath, chainID)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		err = os.MkdirAll(dir, 0755)
 		if err != nil {
@@ -241,16 +264,16 @@ func rewriteChainConfigFile(chainID string, chainState *protos.ChainState) error
 	return nil
 }
 
-func secureDialOpts(cfg *config.Config) []grpc.DialOption {
+func (srv *SyncService) secureDialOpts(cfg *config.ServerConfig) []grpc.DialOption {
 	var dialOpts []grpc.DialOption
 	dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(
 		grpc.MaxCallRecvMsgSize(config.MaxRecvMsgSize),
 		grpc.MaxCallSendMsgSize(config.MaxSendMsgSize),
 	))
 
-	dialOpts = append(dialOpts, config.ClientKeepaliveOptions(cfg.Server.KaOpts)...)
-	if cfg.Server.SecOpts.UseTLS {
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(clientCreds))
+	dialOpts = append(dialOpts, config.ClientKeepaliveOptions(cfg.KaOpts)...)
+	if cfg.SecOpts.UseTLS {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(srv.clientCreds))
 	} else {
 		dialOpts = append(dialOpts, grpc.WithInsecure())
 	}
@@ -258,11 +281,11 @@ func secureDialOpts(cfg *config.Config) []grpc.DialOption {
 	return dialOpts
 }
 
-func serializeIdentity(cfg *config.IdentityConfig) (common.PeerIdentityType, error) {
+func serializeIdentity(cfg *config.IdentityConfig, homedir string) (common.PeerIdentityType, error) {
 	if cfg.ID == "" {
 		return nil, errors.New("Node id must be provided")
 	}
-	if err := cfg.MakeFilesAbs(); err != nil {
+	if err := cfg.MakeFilesAbs(homedir); err != nil {
 		return nil, errors.Wrap(err, "Failed to make identity file absolute")
 	}
 
@@ -301,21 +324,6 @@ func getListenAddress(cfg *config.Config) string {
 
 	lisAddr := net.JoinHostPort(cfg.BindAddress, strconv.Itoa(cfg.BindPort))
 	return lisAddr
-}
-
-func handleSignals(handlers map[os.Signal]func()) {
-	var signals []os.Signal
-	for sig := range handlers {
-		signals = append(signals, sig)
-	}
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, signals...)
-
-	for sig := range signalChan {
-		logging.Infof("Received signal: %d (%s)", sig, sig)
-		handlers[sig]()
-	}
 }
 
 func validateChannelID(chainID string) error {
