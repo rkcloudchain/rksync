@@ -68,5 +68,5 @@ type Adapter interface {
 // and a channel name
 func GenerateMAC(pkiID common.PKIidType, channelID string) []byte {
 	preImage := append([]byte(pkiID), []byte(channelID)...)
-	return util.ComputeSHA256(preImage)
+	return util.ComputeSHA3256(preImage)
 }

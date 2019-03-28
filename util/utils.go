@@ -10,7 +10,6 @@ import (
 	"crypto/ecdsa"
 	cryptorand "crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -22,16 +21,20 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
+	"github.com/rkcloudchain/cccsp/hash"
+	"github.com/rkcloudchain/cccsp/provider"
 )
 
 // Equals returns whether a and b are the same
 type Equals func(a interface{}, b interface{}) bool
 
-// ComputeSHA256 returns SHA2-256 on data
-func ComputeSHA256(data []byte) (hash []byte) {
-	h := sha256.New()
-	h.Write(data)
-	return h.Sum(nil)
+// ComputeSHA3256 returns SHA3-256 on data
+func ComputeSHA3256(data []byte) []byte {
+	h, err := provider.GetDefault().Hash(data, hash.SHA3256)
+	if err != nil {
+		panic(fmt.Errorf("Failed computing SHA3-256 on [% x]", data))
+	}
+	return h
 }
 
 // PEMToX509Certs parse PEM-encoded certs

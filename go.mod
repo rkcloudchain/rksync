@@ -6,7 +6,7 @@ require (
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.3.0
 	github.com/pkg/errors v0.8.1
-	github.com/rkcloudchain/cccsp v1.0.3
+	github.com/rkcloudchain/cccsp v1.1.0
 	github.com/stretchr/testify v1.3.0
 	golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c // indirect
 	golang.org/x/net v0.0.0-20190301231341-16b79f2e4e95 // indirect

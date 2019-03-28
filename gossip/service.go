@@ -216,7 +216,7 @@ func (g *gossipService) GetPKIidOfCert(nodeID string, cert *x509.Certificate) (c
 	}
 
 	raw := append(nodeIDRaw, pemBytes...)
-	digest := util.ComputeSHA256(raw)
+	digest := util.ComputeSHA3256(raw)
 	return digest, nil
 }
 

@@ -66,11 +66,11 @@ func NewIdentity(cfg *config.IdentityConfig, selfIdentity common.PeerIdentityTyp
 	selfPKIID := identity.GetPKIidOfCert(selfIdentity)
 	keyStoreDir := cfg.GetKeyStoreDir()
 
-	var err error
-	identity.csp, err = provider.New(keyStoreDir)
+	fks, err := provider.NewFileKEyStore(keyStoreDir)
 	if err != nil {
 		return nil, err
 	}
+	identity.csp = provider.New(fks)
 
 	if err := identity.setupCAs(cfg); err != nil {
 		return nil, err
@@ -205,7 +205,13 @@ func (is *identityMapper) GetPKIidOfCert(peerIdentity common.PeerIdentityType) c
 	nodeIDRaw := []byte(sid.NodeId)
 	raw := append(nodeIDRaw, sid.IdBytes...)
 
-	return util.ComputeSHA256(raw)
+	digest, err := is.csp.Hash(raw, hash.SHA3256)
+	if err != nil {
+		logging.Errorf("Failed computing digest of serialized identity [% x]: [%s]", peerIdentity, err)
+		return nil
+	}
+
+	return digest
 }
 
 func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
