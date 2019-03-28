@@ -63,14 +63,14 @@ func NewIdentity(cfg *config.IdentityConfig, selfIdentity common.PeerIdentityTyp
 		certs: make(map[string]*storedIdentity),
 	}
 
-	selfPKIID := identity.GetPKIidOfCert(selfIdentity)
 	keyStoreDir := cfg.GetKeyStoreDir()
-
-	fks, err := provider.NewFileKEyStore(keyStoreDir)
+	fks, err := provider.NewFileKeyStore(keyStoreDir)
 	if err != nil {
 		return nil, err
 	}
 	identity.csp = provider.New(fks)
+
+	selfPKIID := identity.GetPKIidOfCert(selfIdentity)
 
 	if err := identity.setupCAs(cfg); err != nil {
 		return nil, err
