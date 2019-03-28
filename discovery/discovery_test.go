@@ -29,6 +29,7 @@ import (
 
 var idCfg1 *config.IdentityConfig
 var idCfg2 *config.IdentityConfig
+var idCfg3 *config.IdentityConfig
 
 func TestMain(m *testing.M) {
 	home1, err := filepath.Abs("../tests/fixtures/identity/peer0")
@@ -56,6 +57,21 @@ func TestMain(m *testing.M) {
 		ID: "peer1.org2",
 	}
 	err = idCfg2.MakeFilesAbs(home2)
+	if err != nil {
+		fmt.Printf("MakeFilesAbs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	home3, err := filepath.Abs("../tests/fixtures/identity/peer2")
+	if err != nil {
+		fmt.Printf("Abs failed: %s\n", err)
+		os.Exit(-1)
+	}
+
+	idCfg3 = &config.IdentityConfig{
+		ID: "peer2.org3",
+	}
+	err = idCfg3.MakeFilesAbs(home3)
 	if err != nil {
 		fmt.Printf("MakeFilesAbs failed: %s\n", err)
 		os.Exit(-1)
@@ -142,6 +158,117 @@ func TestConnect(t *testing.T) {
 
 }
 
+func TestDisconnect(t *testing.T) {
+	selfIdentity1, err := util.GetIdentity(idCfg1)
+	require.NoError(t, err)
+	selfIdentity2, err := util.GetIdentity(idCfg2)
+	require.NoError(t, err)
+	selfIdentity3, err := util.GetIdentity(idCfg3)
+	require.NoError(t, err)
+
+	idMapper1, err := identity.NewIdentity(idCfg1, selfIdentity1, func(_ common.PKIidType) {})
+	require.NoError(t, err)
+	idMapper2, err := identity.NewIdentity(idCfg2, selfIdentity2, func(_ common.PKIidType) {})
+	require.NoError(t, err)
+	idMapper3, err := identity.NewIdentity(idCfg3, selfIdentity3, func(_ common.PKIidType) {})
+	require.NoError(t, err)
+
+	rpc1, grpc1, err := CreateRPCServerWithIdentity("localhost:9053", selfIdentity1, idMapper1)
+	require.NoError(t, err)
+	go grpc1.Start()
+	defer rpc1.Stop()
+
+	rpc2, grpc2, err := CreateRPCServerWithIdentity("localhost:10053", selfIdentity2, idMapper2)
+	require.NoError(t, err)
+	go grpc2.Start()
+	defer rpc2.Stop()
+
+	rpc3, grcp3, err := CreateRPCServerWithIdentity("localhost:8053", selfIdentity3, idMapper3)
+	require.NoError(t, err)
+	go grcp3.Start()
+
+	self1 := common.NetworkMember{Endpoint: "localhost:9053", PKIID: rpc1.GetPKIid()}
+	self2 := common.NetworkMember{Endpoint: "localhost:10053", PKIID: rpc2.GetPKIid()}
+	self3 := common.NetworkMember{Endpoint: "localhost:8053", PKIID: rpc3.GetPKIid()}
+
+	fmt.Printf("Disc 1: %s\n", rpc1.GetPKIid())
+	fmt.Printf("Disc 2: %s\n", rpc2.GetPKIid())
+	fmt.Printf("Disc 3: %s\n", rpc3.GetPKIid())
+
+	mockRPC1 := &mockRPCService{
+		rpc: rpc1,
+		membership: func() []common.NetworkMember {
+			return []common.NetworkMember{
+				common.NetworkMember{Endpoint: "localhost:9053", PKIID: rpc1.GetPKIid()},
+				common.NetworkMember{Endpoint: "localhost:10053", PKIID: rpc2.GetPKIid()},
+				common.NetworkMember{Endpoint: "localhost:8053", PKIID: rpc3.GetPKIid()},
+			}
+		},
+	}
+
+	mockRPC2 := &mockRPCService{
+		rpc: rpc2,
+		membership: func() []common.NetworkMember {
+			return []common.NetworkMember{
+				common.NetworkMember{Endpoint: "localhost:9053", PKIID: rpc1.GetPKIid()},
+				common.NetworkMember{Endpoint: "localhost:10053", PKIID: rpc2.GetPKIid()},
+				common.NetworkMember{Endpoint: "localhost:8053", PKIID: rpc3.GetPKIid()},
+			}
+		},
+	}
+
+	mockRPC3 := &mockRPCService{
+		rpc: rpc3,
+		membership: func() []common.NetworkMember {
+			return []common.NetworkMember{
+				common.NetworkMember{Endpoint: "localhost:9053", PKIID: rpc1.GetPKIid()},
+				common.NetworkMember{Endpoint: "localhost:10053", PKIID: rpc2.GetPKIid()},
+				common.NetworkMember{Endpoint: "localhost:8053", PKIID: rpc3.GetPKIid()},
+			}
+		},
+	}
+	disc1 := NewDiscoveryService(self1, mockRPC1, &mockCryptoService{idMapper1}, noopPolicy)
+	disc2 := NewDiscoveryService(self2, mockRPC2, &mockCryptoService{idMapper2}, noopPolicy)
+	disc3 := NewDiscoveryService(self3, mockRPC3, &mockCryptoService{idMapper3}, noopPolicy)
+	defer disc1.Stop()
+	defer disc2.Stop()
+	defer disc3.Stop()
+
+	identifier2 := func() (common.PKIidType, error) {
+		remote, err := rpc2.Handshake(&common.NetworkMember{Endpoint: "localhost:9053"})
+		if err != nil {
+			return nil, err
+		}
+		pki := idMapper2.GetPKIidOfCert(remote)
+		if len(pki) == 0 {
+			return nil, errors.New("Wasn't able to extract PKI-ID of remote peer with identity")
+		}
+		return pki, nil
+	}
+
+	identifier3 := func() (common.PKIidType, error) {
+		remote, err := rpc3.Handshake(&common.NetworkMember{Endpoint: "localhost:9053"})
+		if err != nil {
+			return nil, err
+		}
+		pki := idMapper3.GetPKIidOfCert(remote)
+		if len(pki) == 0 {
+			return nil, errors.New("Wasn't able to extract PKI-ID of remote peer with identity")
+		}
+		return pki, nil
+	}
+
+	disc2.Connect(common.NetworkMember{Endpoint: "localhost:9053"}, identifier2)
+	disc3.Connect(common.NetworkMember{Endpoint: "localhost:9053"}, identifier3)
+
+	time.Sleep(3 * time.Second)
+	assert.Len(t, disc1.GetMembership(), 2)
+
+	rpc3.Stop()
+	time.Sleep(10 * time.Second)
+	assert.Len(t, disc1.GetMembership(), 1)
+}
+
 type mockRPCService struct {
 	rpc        *rpc.Server
 	membership func() []common.NetworkMember
@@ -217,7 +344,7 @@ func (m *mockCryptoService) ValidateAliveMsg(message *protos.SignedRKSyncMessage
 	} else {
 		cert, err := m.idMapper.Get(am.Membership.PkiId)
 		if err != nil {
-			fmt.Printf("Get member certificate error: %s\n", err)
+			fmt.Printf("Get member certificate for %s error: %s\n", common.PKIidType(am.Membership.PkiId), err)
 			return false
 		}
 		if cert == nil {

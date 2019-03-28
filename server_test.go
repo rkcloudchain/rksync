@@ -93,7 +93,7 @@ func TestRKSyncServiceServe(t *testing.T) {
 	srv3, err := Serve(l3, cfg3)
 	assert.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	assert.Len(t, srv1.gossip.Peers(), 2)
 	assert.Len(t, srv2.gossip.Peers(), 2)
@@ -101,7 +101,7 @@ func TestRKSyncServiceServe(t *testing.T) {
 
 	t.Log("Stop rksync service 3\n")
 	srv3.Stop()
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	assert.Len(t, srv1.gossip.Peers(), 1)
 	assert.Len(t, srv2.gossip.Peers(), 1)
@@ -109,7 +109,7 @@ func TestRKSyncServiceServe(t *testing.T) {
 	srv3, err = Serve(l3, cfg3)
 	assert.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	assert.Len(t, srv1.gossip.Peers(), 2)
 	assert.Len(t, srv2.gossip.Peers(), 2)
