@@ -228,3 +228,32 @@ func TestRKSyncServiceServe(t *testing.T) {
 	_, err = os.Stat(filepath.Join(home, "testdata", "peer2", "rfc2616.txt"))
 	assert.True(t, os.IsNotExist(err))
 }
+
+func TestChannelInitialize(t *testing.T) {
+	home, err := filepath.Abs("tests")
+	require.NoError(t, err)
+
+	cfg1 := &config.Config{
+		HomeDir: filepath.Join(home, "fixtures", "identity", "peer0"),
+		Gossip: &config.GossipConfig{
+			FileSystem:     mocks.NewFSMock(filepath.Join(home, "testdata", "peer0")),
+			BootstrapPeers: []string{"localhost:8053"},
+			Endpoint:       "localhost:8053",
+		},
+		Identity: &config.IdentityConfig{
+			ID: "peer0.org1",
+		},
+	}
+
+	l1, err := net.Listen("tcp", "0.0.0.0:8053")
+	require.NoError(t, err)
+
+	srv1, err := Serve(l1, cfg1)
+	assert.NoError(t, err)
+	defer srv1.Stop()
+
+	time.Sleep(5 * time.Second)
+
+	chainInfo := srv1.gossip.SelfChannelInfo("testchannel1")
+	assert.NotNil(t, chainInfo)
+}
