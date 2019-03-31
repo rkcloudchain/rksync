@@ -538,8 +538,9 @@ func (gc *gossipChannel) requestStateInfo() {
 
 func (gc *gossipChannel) createStateInfoRequest() (*protos.SignedRKSyncMessage, error) {
 	return (&protos.RKSyncMessage{
-		Tag:   protos.RKSyncMessage_CHAN_ONLY,
-		Nonce: 0,
+		Tag:     protos.RKSyncMessage_CHAN_ONLY,
+		Nonce:   0,
+		Channel: []byte(gc.chainID),
 		Content: &protos.RKSyncMessage_StatePullRequest{
 			StatePullRequest: &protos.ChainStatePullRequest{
 				ChainMac: GenerateMAC(gc.pkiID, gc.chainID),

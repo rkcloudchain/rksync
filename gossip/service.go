@@ -159,6 +159,9 @@ func (g *gossipService) InitializeChannel(chainID string, chainState *protos.Cha
 	if g.toDie() {
 		return errors.New("RKSync service is stopping")
 	}
+	if c := g.chanState.getChannelByChainID(chainID); c != nil {
+		return errors.Errorf("Channel (%s) already exists", chainID)
+	}
 
 	mac := channel.GenerateMAC(g.selfPKIid, chainID)
 	if !bytes.Equal(chainState.ChainMac, mac) {
@@ -226,6 +229,10 @@ func (g *gossipService) CreateChannel(chainID string, files []common.FileSyncInf
 	}
 	if g.toDie() {
 		return nil, errors.New("RKSync service is stopping")
+	}
+
+	if c := g.chanState.getChannelByChainID(chainID); c != nil {
+		return nil, errors.Errorf("Channel (%s) already exists", chainID)
 	}
 
 	gc := g.chanState.joinChannel(chainID, true)
