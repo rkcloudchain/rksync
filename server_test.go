@@ -8,6 +8,7 @@ package rksync
 
 import (
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -256,4 +257,45 @@ func TestChannelInitialize(t *testing.T) {
 
 	chainInfo := srv1.gossip.SelfChannelInfo("testchannel1")
 	assert.NotNil(t, chainInfo)
+}
+
+func TestValidChannelName(t *testing.T) {
+	t.Run("ZeroLength", func(t *testing.T) {
+		err := validateChannelName("")
+		assert.Error(t, err)
+	})
+
+	t.Run("LongerThanMaxAllowed", func(t *testing.T) {
+		err := validateChannelName(randomLowerAlphaString(maxLength + 1))
+		assert.Error(t, err)
+	})
+
+	t.Run("ContainsIllegalCharacter", func(t *testing.T) {
+		err := validateChannelName("foo_bar")
+		assert.Error(t, err)
+	})
+
+	t.Run("StartsWithNumber", func(t *testing.T) {
+		err := validateChannelName("8f00")
+		assert.Error(t, err)
+	})
+
+	t.Run("StartWithDot", func(t *testing.T) {
+		err := validateChannelName(".foo")
+		assert.Error(t, err)
+	})
+
+	t.Run("ValidName", func(t *testing.T) {
+		err := validateChannelName("f-oo.bar")
+		assert.NoError(t, err)
+	})
+}
+
+func randomLowerAlphaString(size int) string {
+	letters := []rune("abcdefghijklmnopqrstuvwxyz")
+	output := make([]rune, size)
+	for i := range output {
+		output[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(output)
 }

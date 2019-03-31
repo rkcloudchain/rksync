@@ -8,6 +8,7 @@ package rksync
 
 import (
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"io/ioutil"
 	"net"
@@ -125,13 +126,14 @@ func (srv *Server) Stop() {
 }
 
 // CreateChannel creates a channel
-func (srv *Server) CreateChannel(chainID string, files []common.FileSyncInfo) error {
-	logging.Debugf("Creating channel, ID: %s", chainID)
+func (srv *Server) CreateChannel(chainName string, files []common.FileSyncInfo) error {
+	logging.Debugf("Creating channel, ID: %s", chainName)
 
-	if err := validateChannelID(chainID); err != nil {
+	if err := validateChannelName(chainName); err != nil {
 		return errors.Errorf("Bad channel id: %s", err)
 	}
 
+	chainID := generateChainID(chainName, srv.gossip.SelfPKIid())
 	chainState, err := srv.gossip.CreateChannel(chainID, files)
 	if err != nil {
 		return err
@@ -147,8 +149,8 @@ func (srv *Server) CreateChannel(chainID string, files []common.FileSyncInfo) er
 }
 
 // AddMemberToChan adds a member to the channel
-func (srv *Server) AddMemberToChan(chainID string, nodeID string, cert *x509.Certificate) error {
-	if chainID == "" {
+func (srv *Server) AddMemberToChan(chainName string, nodeID string, cert *x509.Certificate) error {
+	if chainName == "" {
 		return errors.New("Channel ID must be provided")
 	}
 	if nodeID == "" {
@@ -158,6 +160,7 @@ func (srv *Server) AddMemberToChan(chainID string, nodeID string, cert *x509.Cer
 		return errors.New("Node certificate must be provided")
 	}
 
+	chainID := generateChainID(chainName, srv.gossip.SelfPKIid())
 	pkiID, err := srv.gossip.GetPKIidOfCert(nodeID, cert)
 	if err != nil {
 		return err
@@ -172,8 +175,8 @@ func (srv *Server) AddMemberToChan(chainID string, nodeID string, cert *x509.Cer
 }
 
 // AddFileToChan adds a file to the channel
-func (srv *Server) AddFileToChan(chainID string, filepath string, filemode string) error {
-	if chainID == "" {
+func (srv *Server) AddFileToChan(chainName string, filepath string, filemode string) error {
+	if chainName == "" {
 		return errors.New("Channel ID must be provided")
 	}
 	if filepath == "" {
@@ -183,6 +186,7 @@ func (srv *Server) AddFileToChan(chainID string, filepath string, filemode strin
 		return errors.New("File mode must be provided")
 	}
 
+	chainID := generateChainID(chainName, srv.gossip.SelfPKIid())
 	chainState, err := srv.gossip.AddFileToChan(chainID, common.FileSyncInfo{Path: filepath, Mode: filemode})
 	if err != nil {
 		return err
@@ -303,7 +307,7 @@ func serializeIdentity(cfg *config.IdentityConfig, homedir string) (common.PeerI
 	return idBytes, nil
 }
 
-func validateChannelID(chainID string) error {
+func validateChannelName(chainID string) error {
 	re, _ := regexp.Compile(channelAllowedChars)
 	if len(chainID) <= 0 {
 		return errors.New("Channel ID illegal, cannot be empty")
@@ -318,4 +322,11 @@ func validateChannelID(chainID string) error {
 	}
 
 	return nil
+}
+
+func generateChainID(chainName string, pkiID common.PKIidType) string {
+	raw := []byte(chainName)
+	raw = append(raw, pkiID...)
+	chainIDBytes := util.ComputeSHA3256(raw)
+	return hex.EncodeToString(chainIDBytes)
 }
