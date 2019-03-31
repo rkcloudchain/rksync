@@ -8,6 +8,7 @@ package rpc
 
 import (
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -88,6 +89,51 @@ func TestNonResponsivePing(t *testing.T) {
 	case err := <-s:
 		assert.Nil(t, err)
 	}
+}
+
+func TestPresumedDead(t *testing.T) {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		wg.Wait()
+		inst1.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
+	}()
+
+	ticker := time.NewTicker(time.Duration(10) * time.Second)
+	acceptCh := inst2.Accept(func(o interface{}) bool { return true })
+	wg.Done()
+	select {
+	case <-acceptCh:
+		ticker.Stop()
+	case <-ticker.C:
+		assert.Fail(t, "Didn't get first message")
+	}
+
+	go func() {
+		for i := 0; i < 5; i++ {
+			inst1.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:8053", PKIID: []byte("peer2.org3")})
+			time.Sleep(time.Millisecond * 200)
+		}
+	}()
+
+	ticker = time.NewTicker(time.Second * time.Duration(5))
+	select {
+	case <-ticker.C:
+		assert.Fail(t, "Didn't get a presumed dead message within a timely manner")
+		break
+	case <-inst1.PresumedDead():
+		ticker.Stop()
+		break
+	}
+}
+
+func TestProbe(t *testing.T) {
+	time.Sleep(1 * time.Second)
+	assert.NoError(t, inst1.Probe(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()}))
+
+	_, err := inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
+	assert.NoError(t, err)
+	assert.Error(t, inst1.Probe(&common.NetworkMember{Endpoint: "localhost:11053", PKIID: []byte("localhost:11053")}))
 }
 
 func createRKSyncMessage() *protos.SignedRKSyncMessage {
