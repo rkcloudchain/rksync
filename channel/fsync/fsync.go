@@ -127,7 +127,6 @@ func (p *FileSyncProvier) Stop() {
 	p.once.Do(func() {
 		p.stopCh <- struct{}{}
 		p.done.Wait()
-		close(p.stopCh)
 	})
 }
 

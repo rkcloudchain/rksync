@@ -8,6 +8,7 @@ package rpc
 
 import (
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/common"
@@ -61,16 +62,21 @@ func (m *ChannelDeMultiplexer) AddChannel(predicate common.MessageAcceptor) <-ch
 // DeMultiplex broadcasts the message to all channels that were returned
 // by AddChannel calls and that hold the respected predicates.
 func (m *ChannelDeMultiplexer) DeMultiplex(msg interface{}) {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-
-	if m.isClosed() {
-		return
-	}
 	for _, ch := range m.channels {
 		if ch.pred(msg) {
 			go func(c *channel) {
-				c.ch <- msg
+				m.lock.RLock()
+				defer m.lock.RUnlock()
+				if m.isClosed() {
+					return
+				}
+
+				select {
+				case c.ch <- msg:
+				case <-time.After(1 * time.Second):
+					logging.Warningf("Sending message failed: %+v", msg)
+					return
+				}
 			}(ch)
 		}
 	}
