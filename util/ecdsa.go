@@ -106,8 +106,3 @@ func UnmarshalECDSASignature(raw []byte) (*big.Int, *big.Int, error) {
 
 	return sig.R, sig.S, nil
 }
-
-// GetCurveHalfOrdersAt ...
-func GetCurveHalfOrdersAt(c elliptic.Curve) *big.Int {
-	return big.NewInt(0).Set(curveHalfOrders[c])
-}
