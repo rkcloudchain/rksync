@@ -216,7 +216,7 @@ func CreateRPCServer(address string, num int) (*Server, error) {
 	}
 
 	cfg := &config.IdentityConfig{
-		ID: "peer0.org1",
+		ID: fmt.Sprintf("peer%d.org%d", num, num+1),
 	}
 	err = cfg.MakeFilesAbs(home)
 	if err != nil {
