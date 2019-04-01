@@ -10,7 +10,6 @@ import (
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/lib"
 	"github.com/rkcloudchain/rksync/protos"
-	"github.com/rkcloudchain/rksync/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -56,10 +55,6 @@ func TestInterceptAcks(t *testing.T) {
 }
 
 func TestAck(t *testing.T) {
-	var srv1 *server.GRPCServer
-	var srv2 *server.GRPCServer
-	var err error
-
 	home1, err := filepath.Abs("../tests/fixtures/identity/peer0")
 	require.NoError(t, err)
 
@@ -69,7 +64,7 @@ func TestAck(t *testing.T) {
 	err = cfg1.MakeFilesAbs(home1)
 	require.NoError(t, err)
 
-	inst1, srv1, err = CreateRPCServer("localhost:9054", cfg1)
+	inst1, srv1, err := CreateRPCServer("localhost:9054", cfg1)
 	require.NoError(t, err)
 
 	home2, err := filepath.Abs("../tests/fixtures/identity/peer1")
@@ -81,7 +76,7 @@ func TestAck(t *testing.T) {
 	err = cfg2.MakeFilesAbs(home2)
 	require.NoError(t, err)
 
-	inst2, srv2, err = CreateRPCServer("localhost:10054", cfg2)
+	inst2, srv2, err := CreateRPCServer("localhost:10054", cfg2)
 	require.NoError(t, err)
 
 	go srv1.Start()

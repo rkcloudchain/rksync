@@ -171,25 +171,6 @@ func TestRKSyncServiceServe(t *testing.T) {
 	assert.NoError(t, err)
 	defer srv2.Stop()
 
-	cfg3 := &config.Config{
-		HomeDir: filepath.Join(home, "fixtures", "identity", "peer2"),
-		Gossip: &config.GossipConfig{
-			FileSystem:     mocks.NewFSMock(filepath.Join(home, "testdata", "peer2")),
-			BootstrapPeers: []string{"localhost:8053"},
-			Endpoint:       "localhost:10053",
-		},
-		Identity: &config.IdentityConfig{
-			ID: "peer2.org3",
-		},
-	}
-
-	l3, err := net.Listen("tcp", "0.0.0.0:10053")
-	require.NoError(t, err)
-
-	srv3, err := Serve(l3, cfg3)
-	assert.NoError(t, err)
-	defer srv3.Stop()
-
 	err = srv1.CreateChannel("testchannel", []common.FileSyncInfo{
 		common.FileSyncInfo{Path: "101.png", Mode: "Append"},
 		common.FileSyncInfo{Path: "config.yaml", Mode: "Append"},
