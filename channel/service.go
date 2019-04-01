@@ -47,7 +47,7 @@ func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapt
 		fs:       adapter.GetChannelConfig().FileSystem,
 		chainID:  chainID,
 		idMapper: idMapper,
-		stopChan: make(chan struct{}),
+		stopChan: make(chan struct{}, 1),
 		members:  make(map[string]common.PKIidType),
 	}
 	gc.fileState = newFSyncState(gc)
