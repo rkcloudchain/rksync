@@ -8,15 +8,22 @@ package rpc
 
 import (
 	"math/rand"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/rkcloudchain/rksync/common"
+	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/protos"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func TestSendWithAck(t *testing.T) {
 	acceptor := func(o interface{}) bool {
@@ -44,11 +51,9 @@ func TestSendWithAck(t *testing.T) {
 		}
 	}()
 
-	go func() {
-		for i := 0; i < msgNum; i++ {
-			<-inc2
-		}
-	}()
+	for i := 0; i < msgNum; i++ {
+		<-inc2
+	}
 }
 
 func TestGetConnectionInfo(t *testing.T) {
@@ -64,15 +69,44 @@ func TestGetConnectionInfo(t *testing.T) {
 }
 
 func TestHandshake(t *testing.T) {
-	_, err := inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst1.GetPKIid()})
+
+	home1, err := filepath.Abs("../tests/fixtures/identity/peer0")
+	require.NoError(t, err)
+
+	cfg1 := &config.IdentityConfig{
+		ID: "peer0.org1",
+	}
+	err = cfg1.MakeFilesAbs(home1)
+	require.NoError(t, err)
+
+	inst1, srv1, err := CreateRPCServer("localhost:9054", cfg1)
+	require.NoError(t, err)
+
+	home2, err := filepath.Abs("../tests/fixtures/identity/peer1")
+	require.NoError(t, err)
+
+	cfg2 := &config.IdentityConfig{
+		ID: "peer1.org2",
+	}
+	err = cfg2.MakeFilesAbs(home2)
+	require.NoError(t, err)
+
+	inst2, srv2, err := CreateRPCServer("localhost:10054", cfg2)
+	require.NoError(t, err)
+
+	go srv1.Start()
+	defer srv1.Stop()
+	go srv2.Start()
+	defer srv2.Stop()
+
+	_, err = inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10054", PKIID: inst1.GetPKIid()})
 	assert.Error(t, err, "PKI-ID of remote peer doesn't match expected PKI-ID")
 
-	id, err := inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
+	id, err := inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10054", PKIID: inst2.GetPKIid()})
 	assert.NoError(t, err)
 	sid := &protos.SerializedIdentity{}
 	err = proto.Unmarshal(id, sid)
 	assert.NoError(t, err)
-
 	assert.Equal(t, "peer1.org2", sid.NodeId)
 }
 
@@ -96,7 +130,8 @@ func TestPresumedDead(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		wg.Wait()
-		inst1.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
+		msg := createRKSyncMessage()
+		inst1.Send(msg, &common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
 	}()
 
 	ticker := time.NewTicker(time.Duration(10) * time.Second)

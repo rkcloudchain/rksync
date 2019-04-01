@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -15,16 +16,40 @@ func TestChannelDeMultiplexerClose(t *testing.T) {
 
 func TestChannelDeMultiplexerBroadcasts(t *testing.T) {
 	demux := NewChannelDemultiplexer()
-	ch := demux.AddChannel(func(msg interface{}) bool { return true })
+	ch1 := demux.AddChannel(func(msg interface{}) bool { return true })
+	ch2 := demux.AddChannel(func(msg interface{}) bool { return true })
+	assert.Len(t, demux.channels, 2)
 
 	go func() {
 		demux.DeMultiplex("msg")
 	}()
 
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		for {
+			select {
+			case m1 := <-ch1:
+				assert.NotNil(t, m1)
+				assert.Equal(t, "msg", m1.(string))
+				wg.Done()
+			case m2 := <-ch2:
+				assert.NotNil(t, m2)
+				assert.Equal(t, "msg", m2.(string))
+				wg.Done()
+			}
+		}
+	}()
+
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+
 	select {
-	case m := <-ch:
-		assert.NotNil(t, m)
-		assert.Equal(t, "msg", m.(string))
+	case <-c:
 	case <-time.After(2 * time.Second):
 		t.Failed()
 	}

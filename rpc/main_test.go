@@ -71,12 +71,11 @@ func TestMain(m *testing.M) {
 	}
 
 	go srv1.Start()
+	defer srv1.Stop()
 	go srv2.Start()
+	defer srv2.Stop()
 
-	gr := m.Run()
-	srv1.Stop()
-	srv2.Stop()
-	os.Exit(gr)
+	os.Exit(m.Run())
 }
 
 // CreateRPCServer create rpc server

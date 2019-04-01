@@ -257,6 +257,7 @@ func (conn *connection) serviceConnection() error {
 		case stop := <-conn.stopChan:
 			logging.Debug("Closing reading from stream")
 			conn.stopChan <- stop
+			close(quit)
 			return nil
 		case err := <-errChan:
 			return err

@@ -127,7 +127,6 @@ func (s *Server) createConnection(endpoint string, expectedPKIID common.PKIidTyp
 				logging.Debug("Got message:", m)
 				s.msgPublisher.DeMultiplex(&ReceivedMessageImpl{
 					conn:                conn,
-					lock:                conn,
 					SignedRKSyncMessage: m,
 					connInfo:            connInfo,
 				})
@@ -403,12 +402,11 @@ func (s *Server) SyncStream(stream protos.RKSync_SyncStreamServer) error {
 	h := func(m *protos.SignedRKSyncMessage) {
 		s.msgPublisher.DeMultiplex(&ReceivedMessageImpl{
 			conn:                conn,
-			lock:                conn,
 			SignedRKSyncMessage: m,
 			connInfo:            connInfo,
 		})
 	}
-	conn.handler = h
+	conn.handler = interceptAcks(h, connInfo.ID, s.pubSub)
 
 	defer func() {
 		logging.Debug("Client", extractRemoteAddress(stream), "disconnected")

@@ -49,7 +49,7 @@ func (m *ChannelDeMultiplexer) Close() {
 }
 
 // AddChannel registers a channel with a certain predicate
-func (m *ChannelDeMultiplexer) AddChannel(predicate common.MessageAcceptor) chan interface{} {
+func (m *ChannelDeMultiplexer) AddChannel(predicate common.MessageAcceptor) <-chan interface{} {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -69,7 +69,9 @@ func (m *ChannelDeMultiplexer) DeMultiplex(msg interface{}) {
 	}
 	for _, ch := range m.channels {
 		if ch.pred(msg) {
-			ch.ch <- msg
+			go func(c *channel) {
+				c.ch <- msg
+			}(ch)
 		}
 	}
 }
@@ -77,7 +79,6 @@ func (m *ChannelDeMultiplexer) DeMultiplex(msg interface{}) {
 // ReceivedMessageImpl is an implementation of ReceiveMessage
 type ReceivedMessageImpl struct {
 	*protos.SignedRKSyncMessage
-	lock     sync.Locker
 	conn     *connection
 	connInfo *protos.ConnectionInfo
 }

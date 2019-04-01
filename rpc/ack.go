@@ -109,7 +109,7 @@ func (ar AggregatedSendResult) String() string {
 	return string(b)
 }
 
-func interceptAcks(nextHandler handler, remotePeerID common.PKIidType, pubSub *lib.PubSub) func(*protos.SignedRKSyncMessage) {
+func interceptAcks(nextHandler handler, remotePeerID common.PKIidType, pubSub *lib.PubSub) handler {
 	return func(m *protos.SignedRKSyncMessage) {
 		if m.IsAck() {
 			topic := topicForAck(m.Nonce, remotePeerID)
