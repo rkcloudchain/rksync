@@ -359,17 +359,21 @@ func (d *gossipDiscoveryService) periodicalSendAlive() {
 	defer logging.Debug("Stopped")
 
 	for !d.toDie() {
-		logging.Debug("Sleeping", d.aliveTimeInterval)
-		time.Sleep(d.aliveTimeInterval)
-		msg, err := d.createSignedAliveMessage()
-		if err != nil {
-			logging.Warningf("Failed creating alive message: %+v", errors.WithStack(err))
+		select {
+		case <-time.After(d.aliveTimeInterval):
+			msg, err := d.createSignedAliveMessage()
+			if err != nil {
+				logging.Warningf("Failed creating alive message: %+v", errors.WithStack(err))
+				return
+			}
+			d.lock.Lock()
+			d.selfAliveMessage = msg
+			d.lock.Unlock()
+			d.rpc.Gossip(msg)
+		case s := <-d.toDieChan:
+			d.toDieChan <- s
 			return
 		}
-		d.lock.Lock()
-		d.selfAliveMessage = msg
-		d.lock.Unlock()
-		d.rpc.Gossip(msg)
 	}
 }
 
@@ -377,11 +381,16 @@ func (d *gossipDiscoveryService) periodicalCheckAlive() {
 	defer logging.Debug("Stopped")
 
 	for !d.toDie() {
-		time.Sleep(d.aliveExpirationCheckInterval)
-		dead := d.getDeadMembers()
-		if len(dead) > 0 {
-			logging.Debug("Got %d dead members: %v", len(dead), dead)
-			d.expireDeadMembers(dead)
+		select {
+		case <-time.After(d.aliveExpirationCheckInterval):
+			dead := d.getDeadMembers()
+			if len(dead) > 0 {
+				logging.Debug("Got %d dead members: %v", len(dead), dead)
+				d.expireDeadMembers(dead)
+			}
+		case s := <-d.toDieChan:
+			d.toDieChan <- s
+			return
 		}
 	}
 }
@@ -759,23 +768,26 @@ func (d *gossipDiscoveryService) periodicalReconnectToDead() {
 	defer logging.Debug("Stopped")
 
 	for !d.toDie() {
-		wg := sync.WaitGroup{}
-		for _, member := range d.copyLastSeen(d.deadLastTS) {
-			wg.Add(1)
-			go func(member common.NetworkMember) {
-				defer wg.Done()
-				if d.rpc.Ping(&member) {
-					logging.Debug(member, "is responding, sending membership request")
-					d.sendMembershipRequest(&member)
-				} else {
-					logging.Debug(member, "is still dead")
-				}
-			}(member)
+		select {
+		case <-time.After(d.reconnectInterval):
+			wg := sync.WaitGroup{}
+			for _, member := range d.copyLastSeen(d.deadLastTS) {
+				wg.Add(1)
+				go func(member common.NetworkMember) {
+					defer wg.Done()
+					if d.rpc.Ping(&member) {
+						logging.Debug(member, "is responding, sending membership request")
+						d.sendMembershipRequest(&member)
+					} else {
+						logging.Debug(member, "is still dead")
+					}
+				}(member)
+			}
+			wg.Wait()
+		case s := <-d.toDieChan:
+			d.toDieChan <- s
+			return
 		}
-
-		wg.Wait()
-		logging.Debug("Sleeping", d.reconnectInterval)
-		time.Sleep(d.reconnectInterval)
 	}
 }
 
