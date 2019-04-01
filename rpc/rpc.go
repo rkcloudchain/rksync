@@ -369,7 +369,7 @@ func (s *Server) closeSubscriptions() {
 
 // Stop stop the server
 func (s *Server) Stop() {
-	if !atomic.CompareAndSwapInt32(&s.stopping, 0, int32(1)) {
+	if !atomic.CompareAndSwapInt32(&s.stopping, int32(0), int32(1)) {
 		return
 	}
 	logging.Info("Stopping")

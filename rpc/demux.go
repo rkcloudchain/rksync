@@ -8,7 +8,6 @@ package rpc
 
 import (
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/common"
@@ -71,11 +70,7 @@ func (m *ChannelDeMultiplexer) DeMultiplex(msg interface{}) {
 
 	for _, ch := range m.channels {
 		if ch.pred(msg) {
-			select {
-			case ch.ch <- msg:
-			case <-time.After(1 * time.Second):
-				logging.Warningf("DeMultiplex: failed sending message: %+v", msg)
-			}
+			ch.ch <- msg
 		}
 	}
 }
