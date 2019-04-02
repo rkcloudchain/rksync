@@ -117,7 +117,7 @@ func (is *identityMapper) Put(pkiID common.PKIidType, identity common.PeerIdenti
 	is.Lock()
 	defer is.Unlock()
 
-	if _, exists := is.certs[string(pkiID)]; exists {
+	if _, exists := is.certs[pkiID.String()]; exists {
 		return nil
 	}
 
@@ -134,7 +134,7 @@ func (is *identityMapper) Put(pkiID common.PKIidType, identity common.PeerIdenti
 		})
 	}
 
-	is.certs[string(pkiID)] = newStoredIdentity(pkiID, cert, expirationTimer)
+	is.certs[pkiID.String()] = newStoredIdentity(pkiID, cert, expirationTimer)
 	return nil
 }
 
@@ -142,7 +142,7 @@ func (is *identityMapper) Get(pkiID common.PKIidType) (*x509.Certificate, error)
 	is.RLock()
 	defer is.RUnlock()
 
-	id, exists := is.certs[string(pkiID)]
+	id, exists := is.certs[pkiID.String()]
 	if !exists {
 		return nil, errors.New("PKIID wasn't found")
 	}
@@ -316,7 +316,7 @@ func (is *identityMapper) delete(pkiID common.PKIidType) {
 	is.Lock()
 	defer is.Unlock()
 	is.onPurge(pkiID)
-	delete(is.certs, string(pkiID))
+	delete(is.certs, pkiID.String())
 }
 
 // sanitizeCert ensures that x509 certificates signed using ECDSA

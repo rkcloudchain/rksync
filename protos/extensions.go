@@ -32,10 +32,16 @@ func invalidationPolicy(this interface{}, that interface{}) common.InvalidationR
 		return aliveInvalidationPolicy(thisMsg.GetAliveMsg(), thatMsg.GetAliveMsg())
 	}
 	if thisMsg.IsChainStateMsg() && thatMsg.IsChainStateMsg() {
-		if !bytes.Equal(thisMsg.RKSyncMessage.Channel, thatMsg.RKSyncMessage.Channel) {
+		if !bytes.Equal(thisMsg.RKSyncMessage.ChainMac, thatMsg.RKSyncMessage.ChainMac) {
 			return common.MessageNoAction
 		}
 		return stateInvalidationPolicy(thisMsg.GetState(), thatMsg.GetState())
+	}
+	if thisMsg.IsChainPullRequestMsg() && thatMsg.IsChainPullRequestMsg() {
+		if !bytes.Equal(thisMsg.RKSyncMessage.ChainMac, thatMsg.RKSyncMessage.ChainMac) {
+			return common.MessageNoAction
+		}
+		return compareTimestamps(thisMsg.GetStatePullRequest().Timestamp, thatMsg.GetStatePullRequest().Timestamp)
 	}
 
 	return common.MessageNoAction
@@ -114,10 +120,8 @@ func (m *SignedRKSyncMessage) String() string {
 	if m.RKSyncMessage != nil {
 		if m.IsAliveMsg() {
 			msg = aliveMessageToString(m.GetAliveMsg())
-		} else if m.IsStatePullRequestMsg() {
-			msg = statePullRequestToString(m.GetStatePullRequest())
 		} else if m.IsChainStateMsg() {
-			msg = chainStatMessageToString(m.GetState())
+			msg = chainStatMessageToString(m.RKSyncMessage.ChainMac, m.GetState())
 		} else {
 			msg = m.RKSyncMessage.String()
 		}
@@ -126,8 +130,8 @@ func (m *SignedRKSyncMessage) String() string {
 	return fmt.Sprintf("RKSyncMessage: %s, Envelope: %s", msg, env)
 }
 
-func chainStatMessageToString(cs *ChainState) string {
-	str := fmt.Sprintf("chain_state_message: Channel MAC: %s, Sequence: %d", hex.EncodeToString(cs.ChainMac), cs.SeqNum)
+func chainStatMessageToString(chainMac []byte, cs *ChainState) string {
+	str := fmt.Sprintf("chain_state_message: Channel MAC: %s, Sequence: %d", hex.EncodeToString(chainMac), cs.SeqNum)
 	msg, err := cs.Envelope.ToRKSyncMessage()
 	if err == nil {
 		if msg.IsStateInfoMsg() {
@@ -153,10 +157,6 @@ func chainStateInfoPropertyToString(p *Properties) string {
 	}
 
 	return buf.String()
-}
-
-func statePullRequestToString(spr *ChainStatePullRequest) string {
-	return fmt.Sprintf("chain_state_pull_req: Channel MAC %s", hex.EncodeToString(spr.ChainMac))
 }
 
 func aliveMessageToString(am *AliveMessage) string {
@@ -278,6 +278,11 @@ func (m *RKSyncMessage) IsAck() bool {
 // IsAliveMsg returns whether this RKSyncMessage is an AliveMessage
 func (m *RKSyncMessage) IsAliveMsg() bool {
 	return m.GetAliveMsg() != nil
+}
+
+// IsChainPullRequestMsg returns whether this RKSyncMessage is an ChainStatePullRequest message
+func (m *RKSyncMessage) IsChainPullRequestMsg() bool {
+	return m.GetStatePullRequest() != nil
 }
 
 // IsChainStateMsg returns whether this RKSyncMessage is a chain state message

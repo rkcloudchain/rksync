@@ -45,7 +45,7 @@ func TestMembershipStore(t *testing.T) {
 	id3 := common.PKIidType("id3")
 	store.Put(id3, msg3)
 	assert.Equal(t, msg3Clone, msg3)
-	store.MsgByID(id3).Channel = []byte{0, 1, 2, 3}
+	store.MsgByID(id3).ChainMac = []byte{0, 1, 2, 3}
 	assert.NotEqual(t, msg3Clone, msg3)
 }
 

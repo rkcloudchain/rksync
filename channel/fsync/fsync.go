@@ -38,23 +38,24 @@ type Adapter interface {
 }
 
 // NewFileSyncProvider creates FileSyncProvier instance
-func NewFileSyncProvider(chainID, filename string, mode protos.File_Mode, leader bool, pkiID common.PKIidType,
+func NewFileSyncProvider(chainMac common.ChainMac, chainID string, filename string, mode protos.File_Mode, leader bool, pkiID common.PKIidType,
 	adapter Adapter) (*FileSyncProvier, error) {
 
 	msgChan, _ := adapter.Accept(func(message interface{}) bool {
 		return message.(*protos.RKSyncMessage).IsDataMsg() &&
-			bytes.Equal(message.(*protos.RKSyncMessage).Channel, []byte(chainID)) &&
+			bytes.Equal(message.(*protos.RKSyncMessage).ChainMac, chainMac) &&
 			bytes.Equal([]byte(message.(*protos.RKSyncMessage).GetDataMsg().FileName), []byte(filename))
 	}, false)
 
 	reqChan, _ := adapter.Accept(func(message interface{}) bool {
 		return message.(*protos.RKSyncMessage).IsDataReq() &&
-			bytes.Equal(message.(*protos.RKSyncMessage).Channel, []byte(chainID)) &&
+			bytes.Equal(message.(*protos.RKSyncMessage).ChainMac, chainMac) &&
 			bytes.Equal([]byte(message.(*protos.RKSyncMessage).GetDataReq().FileName), []byte(filename))
 	}, false)
 
 	p := &FileSyncProvier{
 		Adapter:  adapter,
+		chainMac: chainMac,
 		chainID:  chainID,
 		filename: filename,
 		mode:     mode,
@@ -87,6 +88,7 @@ func NewFileSyncProvider(chainID, filename string, mode protos.File_Mode, leader
 // FileSyncProvier is the file synchronization handler
 type FileSyncProvier struct {
 	Adapter
+	chainMac common.ChainMac
 	chainID  string
 	filename string
 	state    int32
@@ -109,17 +111,17 @@ func (p *FileSyncProvier) initPayloadBufferStart() (int64, error) {
 	}
 
 	if os.IsNotExist(err) {
-		logging.Debugf("Channel %s file %s does not exists, create it", p.chainID, p.filename)
+		logging.Debugf("Channel %s file %s does not exists, create it", p.chainMac, p.filename)
 		f, err := fs.Create(p.chainID, p.filename)
 		if err != nil {
-			logging.Errorf("Failed creating file %s (Channel %s): %s", p.filename, p.chainID, err)
+			logging.Errorf("Failed creating file %s (Channel %s): %s", p.filename, p.chainMac, err)
 			return 0, err
 		}
 		f.Close()
 		return 0, nil
 	}
 
-	return 0, errors.Errorf("Failed stating file %s (Channel %s): %s", p.filename, p.chainID, err)
+	return 0, errors.Errorf("Failed stating file %s (Channel %s): %s", p.filename, p.chainMac, err)
 }
 
 // Stop stops the FileSyncProvider
@@ -189,7 +191,7 @@ func (p *FileSyncProvier) processPayloads() {
 	fs := p.GetFileSystem()
 	f, err := fs.OpenFile(p.chainID, p.filename, os.O_WRONLY|os.O_APPEND, os.ModePerm)
 	if err != nil {
-		logging.Errorf("Failed opening file %s (Channel %): %s", p.filename, p.chainID, err)
+		logging.Errorf("Failed opening file %s (Channel %): %s", p.filename, p.chainMac, err)
 		return
 	}
 	defer f.Close()
@@ -210,8 +212,8 @@ func (p *FileSyncProvier) processPayloads() {
 }
 
 func (p *FileSyncProvier) queueDataMsg(msg *protos.RKSyncMessage) {
-	if !bytes.Equal(msg.Channel, []byte(p.chainID)) {
-		logging.Warningf("Received message for channel %s while expecting channel %s, ignoring", string(msg.Channel), p.chainID)
+	if !bytes.Equal(msg.ChainMac, p.chainMac) {
+		logging.Warningf("Received message for channel %s while expecting channel %s, ignoring", common.ChainMac(msg.ChainMac), p.chainMac)
 		return
 	}
 
@@ -232,8 +234,8 @@ func (p *FileSyncProvier) queueDataMsg(msg *protos.RKSyncMessage) {
 func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	if !bytes.Equal([]byte(p.chainID), msg.Channel) {
-		logging.Warningf("Received message for channel %s while expecting channel %s, ignoring", string(msg.Channel), p.chainID)
+	if !bytes.Equal(p.chainMac, msg.ChainMac) {
+		logging.Warningf("Received message for channel %s while expecting channel %s, ignoring", common.ChainMac(msg.ChainMac), p.chainMac)
 		return
 	}
 
@@ -283,7 +285,7 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 		fs := p.GetFileSystem()
 		f, err := fs.OpenFile(p.chainID, p.filename, os.O_RDONLY, os.ModePerm)
 		if err != nil {
-			logging.Errorf("Failed opening file %s (Channel %s): %s", p.filename, p.chainID, err)
+			logging.Errorf("Failed opening file %s (Channel %s): %s", p.filename, p.chainMac, err)
 			return
 		}
 		defer f.Close()
@@ -324,9 +326,9 @@ func (p *FileSyncProvier) createAppendDataMsg(data []byte, n int, start int64) (
 	}
 
 	msg := &protos.RKSyncMessage{
-		Nonce:   uint64(0),
-		Channel: []byte(p.chainID),
-		Tag:     protos.RKSyncMessage_CHAN_ONLY,
+		Nonce:    uint64(0),
+		ChainMac: p.chainMac,
+		Tag:      protos.RKSyncMessage_CHAN_ONLY,
 		Content: &protos.RKSyncMessage_DataMsg{
 			DataMsg: &protos.DataMessage{
 				FileName: p.filename,
@@ -361,7 +363,7 @@ func (p *FileSyncProvier) requestDataAppend() {
 
 	endpoints := filter.SelectPeers(1, p.GetMembership(), p.IsMemberInChan)
 	if len(endpoints) == 0 {
-		logging.Warningf("Can't find any member in Chain: %s", p.chainID)
+		logging.Warningf("Can't find any member in Chain: %s", p.chainMac)
 		return
 	}
 
@@ -377,9 +379,9 @@ func (p *FileSyncProvier) createDataAppendMsgRequest() (*protos.SignedRKSyncMess
 
 	if p.mode == protos.File_Append {
 		msg := &protos.RKSyncMessage{
-			Nonce:   uint64(0),
-			Channel: []byte(p.chainID),
-			Tag:     protos.RKSyncMessage_CHAN_ONLY,
+			Nonce:    uint64(0),
+			ChainMac: p.chainMac,
+			Tag:      protos.RKSyncMessage_CHAN_ONLY,
 			Content: &protos.RKSyncMessage_DataReq{
 				DataReq: &protos.DataRequest{
 					FileName: p.filename,

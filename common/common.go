@@ -78,3 +78,14 @@ type FileSyncInfo struct {
 	Path string
 	Mode string
 }
+
+// ChainMac defines the identity representation of a chain
+type ChainMac []byte
+
+func (mac ChainMac) String() string {
+	if mac == nil {
+		return "<nil>"
+	}
+
+	return hex.EncodeToString(mac)
+}

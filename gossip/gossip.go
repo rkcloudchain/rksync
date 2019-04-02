@@ -26,22 +26,22 @@ type Gossip interface {
 	SelfChannelInfo(chainID string) *protos.ChainState
 
 	// AddMemberToChan adds member to channel
-	AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error)
+	AddMemberToChan(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error)
 
 	// AddFileToChan adds file to channel
-	AddFileToChan(chainID string, file common.FileSyncInfo) (*protos.ChainState, error)
+	AddFileToChan(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error)
 
 	// GetPKIidOfCert returns the PKI-ID of a certificate
 	GetPKIidOfCert(nodeID string, cert *x509.Certificate) (common.PKIidType, error)
 
 	// InitializeChannel initialize channel
-	InitializeChannel(chainID string, chainState *protos.ChainState) error
+	InitializeChannel(chainMac common.ChainMac, chainState *protos.ChainState) error
 
 	// CreateChannel creates a channel
-	CreateChannel(chainID string, files []common.FileSyncInfo) (*protos.ChainState, error)
+	CreateChannel(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error)
 
 	// CloseChannel closes a channel
-	CloseChannel(chainID string)
+	CloseChannel(chainMac common.ChainMac)
 
 	// GetPeers returns the NetworkMembers considered alive
 	Peers() []common.NetworkMember

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/tests/mocks"
 	"github.com/rkcloudchain/rksync/tests/util"
@@ -43,17 +44,18 @@ func TestFileSync(t *testing.T) {
 	go srv2.Start()
 	defer gossipSvc2.Stop()
 
-	_, err = gossipSvc1.CreateChannel("testchannel", []common.FileSyncInfo{
+	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "testchannel")
+	_, err = gossipSvc1.CreateChannel(mac, "testchannel", []common.FileSyncInfo{
 		common.FileSyncInfo{Path: "101.png", Mode: "Append"},
 		common.FileSyncInfo{Path: "config.yaml", Mode: "Append"},
 		common.FileSyncInfo{Path: "rfc2616.txt", Mode: "Append"},
 	})
 	assert.NoError(t, err)
-	_, err = gossipSvc1.AddMemberToChan("testchannel", gossipSvc2.SelfPKIid())
+	_, err = gossipSvc1.AddMemberToChan(mac, gossipSvc2.SelfPKIid())
 	assert.NoError(t, err)
-	_, err = gossipSvc1.AddFileToChan("testchannel", common.FileSyncInfo{Path: "https-cert.pem", Mode: "Append"})
+	_, err = gossipSvc1.AddFileToChan(mac, common.FileSyncInfo{Path: "https-cert.pem", Mode: "Append"})
 	assert.NoError(t, err)
-	_, err = gossipSvc1.AddFileToChan("testchannel", common.FileSyncInfo{Path: "https-key.pem", Mode: "Append"})
+	_, err = gossipSvc1.AddFileToChan(mac, common.FileSyncInfo{Path: "https-key.pem", Mode: "Append"})
 	assert.NoError(t, err)
 
 	time.Sleep(5 * time.Second)

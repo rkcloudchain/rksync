@@ -17,6 +17,7 @@ import (
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/filter"
 	"github.com/rkcloudchain/rksync/identity"
+	"github.com/rkcloudchain/rksync/lib"
 	"github.com/rkcloudchain/rksync/logging"
 	"github.com/rkcloudchain/rksync/protos"
 )
@@ -24,12 +25,16 @@ import (
 type gossipChannel struct {
 	Adapter
 	sync.RWMutex
+	incTime                   uint64
+	seqNum                    uint64
+	chainID                   string
 	fs                        config.FileSystem
 	pkiID                     common.PKIidType
 	leader                    bool
+	msgStore                  lib.MessageStore
 	chainStateMsg             *protos.ChainState
 	idMapper                  identity.Identity
-	chainID                   string
+	chainMac                  common.ChainMac
 	members                   map[string]common.PKIidType
 	fileState                 *fsyncState
 	stateInfoPublishScheduler *time.Ticker
@@ -38,19 +43,29 @@ type gossipChannel struct {
 }
 
 // NewGossipChannel creates a new gossip Channel
-func NewGossipChannel(pkiID common.PKIidType, chainID string, leader bool, adapter Adapter, idMapper identity.Identity) Channel {
+func NewGossipChannel(pkiID common.PKIidType, chainMac common.ChainMac, chainID string, leader bool, adapter Adapter, idMapper identity.Identity) Channel {
 
 	gc := &gossipChannel{
+		incTime:  uint64(time.Now().UnixNano()),
+		seqNum:   uint64(0),
+		chainID:  chainID,
 		pkiID:    pkiID,
 		Adapter:  adapter,
 		leader:   leader,
 		fs:       adapter.GetChannelConfig().FileSystem,
-		chainID:  chainID,
+		chainMac: chainMac,
 		idMapper: idMapper,
 		stopChan: make(chan struct{}, 1),
 		members:  make(map[string]common.PKIidType),
 	}
 	gc.fileState = newFSyncState(gc)
+	gc.msgStore = lib.NewMessageStoreExpirable(
+		protos.NewRKSyncMessageComparator(),
+		lib.Noop,
+		gc.GetChannelConfig().RequestStateInfoInterval*100,
+		nil,
+		nil,
+		lib.Noop)
 
 	if gc.leader {
 		gc.stateInfoPublishScheduler = time.NewTicker(adapter.GetChannelConfig().PublishStateInfoInterval)
@@ -93,7 +108,7 @@ func (gc *gossipChannel) InitializeWithChainState(chainState *protos.ChainState)
 	return nil
 }
 
-func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.FileSyncInfo) (*protos.ChainState, error) {
+func (gc *gossipChannel) Initialize(chainID string, members []common.PKIidType, files []common.FileSyncInfo) (*protos.ChainState, error) {
 	gc.Lock()
 	defer gc.Unlock()
 
@@ -123,9 +138,9 @@ func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.F
 
 	stateInfoMsg := &protos.SignedRKSyncMessage{
 		RKSyncMessage: &protos.RKSyncMessage{
-			Tag:     protos.RKSyncMessage_CHAN_ONLY,
-			Channel: []byte(gc.chainID),
-			Nonce:   0,
+			Tag:      protos.RKSyncMessage_CHAN_ONLY,
+			ChainMac: gc.chainMac,
+			Nonce:    0,
 			Content: &protos.RKSyncMessage_StateInfo{
 				StateInfo: stateInfo,
 			},
@@ -141,7 +156,7 @@ func (gc *gossipChannel) Initialize(members []common.PKIidType, files []common.F
 
 	chainState := &protos.ChainState{
 		SeqNum:   uint64(time.Now().UnixNano()),
-		ChainMac: GenerateMAC(gc.pkiID, gc.chainID),
+		ChainId:  chainID,
 		Envelope: envp,
 	}
 	gc.chainStateMsg = chainState
@@ -241,12 +256,14 @@ func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 	}
 
 	if m.IsStatePullRequestMsg() {
-		resp, err := gc.createChainStateResponse()
-		if err != nil {
-			logging.Errorf("Failed creating ChainStateResponse message: %v", err)
-			return
+		if gc.msgStore.Add(m) {
+			resp, err := gc.createChainStateResponse()
+			if err != nil {
+				logging.Errorf("Failed creating ChainStateResponse message: %v", err)
+				return
+			}
+			msg.Respond(resp)
 		}
-		msg.Respond(resp)
 		return
 	}
 
@@ -260,7 +277,7 @@ func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 			return gc.idMapper.Verify(peerIdentity, signature, message)
 		})
 		if err != nil {
-			logging.Warningf("Channel %s: Failed validating ChainState message: %v", gc.chainID, err)
+			logging.Warningf("Channel %s: Failed validating ChainState message: %v", gc.chainMac, err)
 			return
 		}
 
@@ -273,7 +290,7 @@ func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 	if m.IsDataMsg() || m.IsDataReq() {
 		if m.IsDataMsg() {
 			if gc.leader {
-				logging.Infof("Channel %s: Leader does not need to handle data message", gc.chainID)
+				logging.Infof("Channel %s: Leader does not need to handle data message", gc.chainMac)
 				return
 			}
 
@@ -310,6 +327,7 @@ func (gc *gossipChannel) IsMemberInChan(member common.NetworkMember) bool {
 
 func (gc *gossipChannel) Stop() {
 	gc.stopChan <- struct{}{}
+	gc.msgStore.Stop()
 	gc.fileState.stop()
 	if gc.stateInfoPublishScheduler != nil {
 		gc.stateInfoPublishScheduler.Stop()
@@ -323,19 +341,18 @@ func (gc *gossipChannel) handleChainStateResponse(m *protos.RKSyncMessage, sende
 	envelope := m.GetStatePullResponse().Element
 	chainState, err := envelope.ToRKSyncMessage()
 	if err != nil {
-		logging.Warningf("Channel %s: ChainState contains an invalid message: %+v", gc.chainID, err)
+		logging.Warningf("Channel %s: ChainState contains an invalid message: %+v", gc.chainMac, err)
 		return
 	}
 
 	if !chainState.IsChainStateMsg() {
-		logging.Warningf("Channel %s: Element of ChainStateResponse isn't a ChainState: %s, message sent from %s", gc.chainID, chainState, sender)
+		logging.Warningf("Channel %s: Element of ChainStateResponse isn't a ChainState: %s, message sent from %s", gc.chainMac, chainState, sender)
 		return
 	}
 
 	cs := chainState.GetState()
-	expectedMAC := GenerateMAC(sender, gc.chainID)
-	if !bytes.Equal(cs.ChainMac, expectedMAC) {
-		logging.Warningf("Channel %s: ChainState message has an invalid MAC, expected %s, got %s, sent from %s", gc.chainID, expectedMAC, cs.ChainMac, sender)
+	if !bytes.Equal(m.ChainMac, gc.chainMac) {
+		logging.Warningf("Channel %s: ChainState message has an invalid MAC, expected %s, got %s, sent from %s", gc.chainMac, gc.chainMac, m.ChainMac, sender)
 		return
 	}
 
@@ -343,7 +360,7 @@ func (gc *gossipChannel) handleChainStateResponse(m *protos.RKSyncMessage, sende
 		return gc.idMapper.Verify(peerIdentity, signature, message)
 	})
 	if err != nil {
-		logging.Warningf("Channel %s: Failed validating ChainState message: %v, sent from: %s", gc.chainID, err, sender)
+		logging.Warningf("Channel %s: Failed validating ChainState message: %v, sent from: %s", gc.chainMac, err, sender)
 		return
 	}
 
@@ -352,17 +369,17 @@ func (gc *gossipChannel) handleChainStateResponse(m *protos.RKSyncMessage, sende
 
 func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.PKIidType) error {
 	if gc.leader {
-		logging.Infof("Channel %s: Leader does not need to update chain state", gc.chainID)
+		logging.Infof("Channel %s: Leader does not need to update chain state", gc.chainMac)
 		return nil
 	}
 	chainStateInfo, err := msg.Envelope.ToRKSyncMessage()
 	if err != nil {
-		logging.Warningf("Channel %s: ChainState's envelope contains an invalid message: %+v", gc.chainID, err)
+		logging.Warningf("Channel %s: ChainState's envelope contains an invalid message: %+v", gc.chainMac, err)
 		return err
 	}
 
 	if !chainStateInfo.IsStateInfoMsg() {
-		logging.Warningf("Channel %s: Element of ChainState isn't a ChainStateInfo: %s, message sent from %s", gc.chainID, chainStateInfo, sender)
+		logging.Warningf("Channel %s: Element of ChainState isn't a ChainStateInfo: %s, message sent from %s", gc.chainMac, chainStateInfo, sender)
 		return errors.New("Element of ChainState isn't a ChainStateInfo")
 	}
 
@@ -371,7 +388,7 @@ func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.
 		return gc.idMapper.Verify(peerIdentity, signature, message)
 	})
 	if err != nil {
-		logging.Warningf("Channel %s: Failed validating ChainStateInfo message: %v, sent from: %s", gc.chainID, err, sender)
+		logging.Warningf("Channel %s: Failed validating ChainStateInfo message: %v, sent from: %s", gc.chainMac, err, sender)
 		return err
 	}
 
@@ -386,7 +403,7 @@ func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.
 		}
 
 		if !bytes.Equal(oldMsg.GetStateInfo().Leader, csi.Leader) {
-			logging.Warningf("Channel %s: Leader has been changed, original %s, now is %s", gc.chainID, oldMsg.GetStateInfo().Leader, csi.Leader)
+			logging.Warningf("Channel %s: Leader has been changed, original %s, now is %s", gc.chainMac, common.PKIidType(oldMsg.GetStateInfo().Leader), common.PKIidType(csi.Leader))
 			return errors.New("Channel's leader has been changed")
 		}
 	}
@@ -412,9 +429,9 @@ func (gc *gossipChannel) createChainStateResponse() (*protos.RKSyncMessage, erro
 	defer gc.RUnlock()
 	element := &protos.SignedRKSyncMessage{
 		RKSyncMessage: &protos.RKSyncMessage{
-			Channel: []byte(gc.chainID),
-			Tag:     protos.RKSyncMessage_CHAN_ONLY,
-			Nonce:   0,
+			ChainMac: gc.chainMac,
+			Tag:      protos.RKSyncMessage_CHAN_ONLY,
+			Nonce:    0,
 			Content: &protos.RKSyncMessage_State{
 				State: gc.chainStateMsg,
 			},
@@ -429,9 +446,9 @@ func (gc *gossipChannel) createChainStateResponse() (*protos.RKSyncMessage, erro
 	}
 
 	return &protos.RKSyncMessage{
-		Channel: []byte(gc.chainID),
-		Tag:     protos.RKSyncMessage_CHAN_ONLY,
-		Nonce:   0,
+		ChainMac: gc.chainMac,
+		Tag:      protos.RKSyncMessage_CHAN_ONLY,
+		Nonce:    0,
 		Content: &protos.RKSyncMessage_StatePullResponse{
 			StatePullResponse: &protos.ChainStatePullResponse{
 				Element: element.Envelope,
@@ -457,28 +474,8 @@ func (gc *gossipChannel) verifyMsg(msg protos.ReceivedMessage) bool {
 		return false
 	}
 
-	if m.IsChainStateMsg() {
-		si := m.GetState()
-		expectedMAC := GenerateMAC(msg.GetConnectionInfo().ID, gc.chainID)
-		if !bytes.Equal(expectedMAC, si.ChainMac) {
-			logging.Warning("Message contains wrong channel MAC (", si.ChainMac, "), expected", expectedMAC)
-			return false
-		}
-		return true
-	}
-
-	if m.IsStatePullRequestMsg() {
-		sipr := m.GetStatePullRequest()
-		expectedMAC := GenerateMAC(msg.GetConnectionInfo().ID, gc.chainID)
-		if !bytes.Equal(expectedMAC, sipr.ChainMac) {
-			logging.Warning("Message contains wrong channel MAC (", sipr.ChainMac, "), expected", expectedMAC)
-			return false
-		}
-		return true
-	}
-
-	if !bytes.Equal(m.Channel, []byte(gc.chainID)) {
-		logging.Warning("Message contains wrong channel (", string(m.Channel), "), exptected", gc.chainID)
+	if !bytes.Equal(gc.chainMac, m.ChainMac) {
+		logging.Warning("Message contains wrong channel MAC (", m.ChainMac, "), expected", gc.chainMac)
 		return false
 	}
 
@@ -504,9 +501,9 @@ func (gc *gossipChannel) publishStateInfo() {
 
 	msg := &protos.SignedRKSyncMessage{
 		RKSyncMessage: &protos.RKSyncMessage{
-			Channel: []byte(gc.chainID),
-			Tag:     protos.RKSyncMessage_CHAN_ONLY,
-			Nonce:   0,
+			ChainMac: gc.chainMac,
+			Tag:      protos.RKSyncMessage_CHAN_ONLY,
+			Nonce:    0,
 			Content: &protos.RKSyncMessage_State{
 				State: chainStateMsg,
 			},
@@ -537,13 +534,21 @@ func (gc *gossipChannel) requestStateInfo() {
 }
 
 func (gc *gossipChannel) createStateInfoRequest() (*protos.SignedRKSyncMessage, error) {
+	gc.Lock()
+	defer gc.Unlock()
+	gc.seqNum++
+	seq := gc.seqNum
+
 	return (&protos.RKSyncMessage{
-		Tag:     protos.RKSyncMessage_CHAN_ONLY,
-		Nonce:   0,
-		Channel: []byte(gc.chainID),
+		Tag:      protos.RKSyncMessage_CHAN_ONLY,
+		Nonce:    0,
+		ChainMac: gc.chainMac,
 		Content: &protos.RKSyncMessage_StatePullRequest{
 			StatePullRequest: &protos.ChainStatePullRequest{
-				ChainMac: GenerateMAC(gc.pkiID, gc.chainID),
+				Timestamp: &protos.PeerTime{
+					IncNum: gc.incTime,
+					SeqNum: seq,
+				},
 			},
 		},
 	}).NoopSign()

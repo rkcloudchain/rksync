@@ -51,9 +51,10 @@ func (f *fsyncState) createProvider(filename string, mode protos.File_Mode, lead
 	_, exists := f.files[filename]
 	if !exists {
 		pkiID := f.gc.pkiID
+		chainMac := f.gc.chainMac
 		chainID := f.gc.chainID
 		fa := &fsyncAdapterImpl{gossipChannel: f.gc}
-		fs, err := fsync.NewFileSyncProvider(chainID, filename, mode, leader, pkiID, fa)
+		fs, err := fsync.NewFileSyncProvider(chainMac, chainID, filename, mode, leader, pkiID, fa)
 		if err != nil {
 			return err
 		}

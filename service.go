@@ -8,6 +8,7 @@ package rksync
 
 import (
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"io/ioutil"
 	"net"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/gossip"
@@ -132,14 +134,15 @@ func (srv *Server) CreateChannel(chainID string, files []common.FileSyncInfo) er
 		return errors.Errorf("Bad channel id: %s", err)
 	}
 
-	chainState, err := srv.gossip.CreateChannel(chainID, files)
+	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
+	chainState, err := srv.gossip.CreateChannel(mac, chainID, files)
 	if err != nil {
 		return err
 	}
 
-	err = srv.rewriteChainConfigFile(chainID, chainState)
+	err = srv.rewriteChainConfigFile(mac, chainState)
 	if err != nil {
-		srv.gossip.CloseChannel(chainID)
+		srv.gossip.CloseChannel(mac)
 		return err
 	}
 
@@ -163,12 +166,13 @@ func (srv *Server) AddMemberToChan(chainID string, nodeID string, cert *x509.Cer
 		return err
 	}
 
-	chainState, err := srv.gossip.AddMemberToChan(chainID, pkiID)
+	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
+	chainState, err := srv.gossip.AddMemberToChan(mac, pkiID)
 	if err != nil {
 		return err
 	}
 
-	return srv.rewriteChainConfigFile(chainID, chainState)
+	return srv.rewriteChainConfigFile(mac, chainState)
 }
 
 // AddFileToChan adds a file to the channel
@@ -183,12 +187,13 @@ func (srv *Server) AddFileToChan(chainID string, filepath string, filemode strin
 		return errors.New("File mode must be provided")
 	}
 
-	chainState, err := srv.gossip.AddFileToChan(chainID, common.FileSyncInfo{Path: filepath, Mode: filemode})
+	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
+	chainState, err := srv.gossip.AddFileToChan(mac, common.FileSyncInfo{Path: filepath, Mode: filemode})
 	if err != nil {
 		return err
 	}
 
-	return srv.rewriteChainConfigFile(chainID, chainState)
+	return srv.rewriteChainConfigFile(mac, chainState)
 }
 
 func (srv *Server) initializeChannel() {
@@ -218,15 +223,21 @@ func (srv *Server) initializeChannel() {
 			continue
 		}
 
-		err = srv.gossip.InitializeChannel(dir, chainState)
+		mac, err := hex.DecodeString(dir)
+		if err != nil {
+			logging.Errorf("Error decoding directory string: %s", err)
+			continue
+		}
+
+		err = srv.gossip.InitializeChannel(common.ChainMac(mac), chainState)
 		if err != nil {
 			logging.Errorf("Error initializing channel %s: %s", dir, err)
 		}
 	}
 }
 
-func (srv *Server) rewriteChainConfigFile(chainID string, chainState *protos.ChainState) error {
-	dir := filepath.Join(srv.chainFilePath, chainID)
+func (srv *Server) rewriteChainConfigFile(chainMac common.ChainMac, chainState *protos.ChainState) error {
+	dir := filepath.Join(srv.chainFilePath, chainMac.String())
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		err = os.MkdirAll(dir, 0755)
 		if err != nil {

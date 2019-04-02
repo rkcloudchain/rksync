@@ -37,7 +37,7 @@ type Channel interface {
 	HandleMessage(protos.ReceivedMessage)
 
 	// Initialize allocates the ChainState and should be invoked once per channel per creation
-	Initialize([]common.PKIidType, []common.FileSyncInfo) (*protos.ChainState, error)
+	Initialize(string, []common.PKIidType, []common.FileSyncInfo) (*protos.ChainState, error)
 
 	// InitializeWithChanState allocates the ChainState message
 	InitializeWithChainState(*protos.ChainState) error
@@ -66,7 +66,7 @@ type Adapter interface {
 
 // GenerateMAC returns a byte slice that is derived from the peer's PKI-ID
 // and a channel name
-func GenerateMAC(pkiID common.PKIidType, channelID string) []byte {
+func GenerateMAC(pkiID common.PKIidType, channelID string) common.ChainMac {
 	preImage := append([]byte(pkiID), []byte(channelID)...)
 	return util.ComputeSHA3256(preImage)
 }

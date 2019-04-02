@@ -30,7 +30,7 @@ func NewMembershipStore() *MembershipStore {
 func (m *MembershipStore) MsgByID(pkiID common.PKIidType) *protos.SignedRKSyncMessage {
 	m.RLock()
 	defer m.RUnlock()
-	if msg, exists := m.m[string(pkiID)]; exists {
+	if msg, exists := m.m[pkiID.String()]; exists {
 		return msg
 	}
 	return nil
@@ -47,14 +47,14 @@ func (m *MembershipStore) Size() int {
 func (m *MembershipStore) Put(pkiID common.PKIidType, msg *protos.SignedRKSyncMessage) {
 	m.Lock()
 	defer m.Unlock()
-	m.m[string(pkiID)] = msg
+	m.m[pkiID.String()] = msg
 }
 
 // Remove removes a message with a given pkiID
 func (m *MembershipStore) Remove(pkiID common.PKIidType) {
 	m.Lock()
 	defer m.Unlock()
-	delete(m.m, string(pkiID))
+	delete(m.m, pkiID.String())
 }
 
 // ToSlice returns a slice backed by the elements

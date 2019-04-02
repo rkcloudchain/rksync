@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/server"
@@ -83,10 +84,11 @@ func TestChannelInit(t *testing.T) {
 	assert.Equal(t, 1, len(gossipSvc2.Peers()))
 
 	fmt.Println("Create channel")
-	_, err = gossipSvc1.CreateChannel("testchannel", []common.FileSyncInfo{})
+	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "testchannel")
+	_, err = gossipSvc1.CreateChannel(mac, "testchannel", []common.FileSyncInfo{})
 	assert.NoError(t, err)
 	fmt.Println("Add member to channel")
-	_, err = gossipSvc1.AddMemberToChan("testchannel", gossipSvc2.SelfPKIid())
+	_, err = gossipSvc1.AddMemberToChan(mac, gossipSvc2.SelfPKIid())
 	assert.NoError(t, err)
 
 	time.Sleep(5 * time.Second)

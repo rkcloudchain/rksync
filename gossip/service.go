@@ -10,7 +10,6 @@ package gossip
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/pem"
 	"reflect"
 	"sync"
@@ -152,59 +151,54 @@ func (g *gossipService) Accept(acceptor common.MessageAcceptor, passThrough bool
 	return outCh, nil
 }
 
-func (g *gossipService) InitializeChannel(chainID string, chainState *protos.ChainState) error {
-	if chainID == "" {
-		return errors.New("Channel ID must be provided")
+func (g *gossipService) InitializeChannel(chainMac common.ChainMac, chainState *protos.ChainState) error {
+	if len(chainMac) == 0 {
+		return errors.New("Channel mac can't be nil or empty")
 	}
 	if g.toDie() {
 		return errors.New("RKSync service is stopping")
 	}
-	if c := g.chanState.getChannelByChainID(chainID); c != nil {
-		return errors.Errorf("Channel (%s) already exists", chainID)
-	}
-
-	mac := channel.GenerateMAC(g.selfPKIid, chainID)
-	if !bytes.Equal(chainState.ChainMac, mac) {
-		return errors.Errorf("Channel MAC doesn't match, expected: %s, actual: %s", hex.EncodeToString(mac), hex.EncodeToString(chainState.ChainMac))
+	if c := g.chanState.getChannelByMAC(chainMac); c != nil {
+		return errors.Errorf("Channel (%s) already exists", chainMac)
 	}
 
 	signedMsg, err := chainState.Envelope.ToRKSyncMessage()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to parse channel %s state information", chainID)
+		return errors.Wrapf(err, "Failed to parse channel %s state information", chainMac)
 	}
 
 	err = signedMsg.Verify(g.selfPKIid, func(peerIdentity []byte, signature, message []byte) error {
 		return g.idMapper.Verify(peerIdentity, signature, message)
 	})
 	if err != nil {
-		return errors.Wrapf(err, "Failed verifying %s chain state information signature: %s", chainID, err)
+		return errors.Wrapf(err, "Failed verifying %s chain state information signature: %s", chainMac, err)
 	}
 
 	stateInfo, err := chainState.GetChainStateInfo()
 	if err != nil {
-		return errors.Errorf("Channel %s: state information format error: %s", chainID, err)
+		return errors.Errorf("Channel %s: state information format error: %s", chainMac, err)
 	}
 	if !bytes.Equal(common.PKIidType(stateInfo.Leader), g.selfPKIid) {
-		return errors.Errorf("Channel %s: current peer's PKI-ID (%s) doesn't match the leader PKI-ID (%s)", chainID, g.selfPKIid, common.PKIidType(stateInfo.Leader))
+		return errors.Errorf("Channel %s: current peer's PKI-ID (%s) doesn't match the leader PKI-ID (%s)", chainMac, g.selfPKIid, common.PKIidType(stateInfo.Leader))
 	}
 
-	gc := g.chanState.joinChannel(chainID, true)
+	gc := g.chanState.joinChannel(chainMac, chainState.ChainId, true)
 	return gc.InitializeWithChainState(chainState)
 }
 
-func (g *gossipService) AddMemberToChan(chainID string, member common.PKIidType) (*protos.ChainState, error) {
-	gc := g.chanState.getChannelByChainID(chainID)
+func (g *gossipService) AddMemberToChan(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error) {
+	gc := g.chanState.getChannelByMAC(chainMac)
 	if gc == nil {
-		return nil, errors.Errorf("Channel %s not yet created", chainID)
+		return nil, errors.Errorf("Channel %s not yet created", chainMac)
 	}
 
 	return gc.AddMember(member)
 }
 
-func (g *gossipService) AddFileToChan(chainID string, file common.FileSyncInfo) (*protos.ChainState, error) {
-	gc := g.chanState.getChannelByChainID(chainID)
+func (g *gossipService) AddFileToChan(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error) {
+	gc := g.chanState.getChannelByMAC(chainMac)
 	if gc == nil {
-		return nil, errors.Errorf("Channel %s not yet created", chainID)
+		return nil, errors.Errorf("Channel %s not yet created", chainMac)
 	}
 
 	return gc.AddFile(file)
@@ -223,7 +217,10 @@ func (g *gossipService) GetPKIidOfCert(nodeID string, cert *x509.Certificate) (c
 	return digest, nil
 }
 
-func (g *gossipService) CreateChannel(chainID string, files []common.FileSyncInfo) (*protos.ChainState, error) {
+func (g *gossipService) CreateChannel(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error) {
+	if len(chainMac) == 0 {
+		return nil, errors.New("Channel mac can't be nil or empty")
+	}
 	if chainID == "" {
 		return nil, errors.New("Channel ID must be provided")
 	}
@@ -231,20 +228,20 @@ func (g *gossipService) CreateChannel(chainID string, files []common.FileSyncInf
 		return nil, errors.New("RKSync service is stopping")
 	}
 
-	if c := g.chanState.getChannelByChainID(chainID); c != nil {
+	if c := g.chanState.getChannelByMAC(chainMac); c != nil {
 		return nil, errors.Errorf("Channel (%s) already exists", chainID)
 	}
 
-	gc := g.chanState.joinChannel(chainID, true)
-	return gc.Initialize([]common.PKIidType{g.selfPKIid}, files)
+	gc := g.chanState.joinChannel(chainMac, chainID, true)
+	return gc.Initialize(chainID, []common.PKIidType{g.selfPKIid}, files)
 }
 
-func (g *gossipService) CloseChannel(chainID string) {
-	if chainID == "" {
+func (g *gossipService) CloseChannel(chainMac common.ChainMac) {
+	if len(chainMac) == 0 {
 		return
 	}
 
-	g.chanState.removeChannel(chainID)
+	g.chanState.removeChannel(chainMac)
 }
 
 func (g *gossipService) Stop() {
@@ -297,7 +294,7 @@ func (g *gossipService) gossipBatch(msgs []*emittedRKSyncMessage) {
 		peerSelector := func(member common.NetworkMember) bool {
 			return chainStateMsg.filter(member.PKIID)
 		}
-		gc := g.chanState.getChannelByChainID(string(chainStateMsg.Channel))
+		gc := g.chanState.getChannelByMAC(chainStateMsg.ChainMac)
 		if gc != nil {
 			peerSelector = filter.CombineRoutingFilters(peerSelector, gc.IsMemberInChan)
 		}
@@ -377,6 +374,19 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 	}
 
 	if msg.IsChainStateMsg() {
+		chainState := msg.GetState()
+		chainInfo, err := chainState.GetChainStateInfo()
+		if err != nil {
+			logging.Warningf("Failed getting ChainStateInfo message: %s", err)
+			return
+		}
+
+		mac := channel.GenerateMAC(chainInfo.Leader, chainState.ChainId)
+		if !bytes.Equal(mac, msg.ChainMac) {
+			logging.Warningf("ChainState message has an invalid MAC, expected %s, got %s, sent from %s", common.ChainMac(msg.ChainMac), mac, m.GetConnectionInfo().ID)
+			return
+		}
+
 		g.emitter.Add(&emittedRKSyncMessage{
 			SignedRKSyncMessage: msg,
 			filter:              m.GetConnectionInfo().ID.IsNotSameFilter,
@@ -386,7 +396,7 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 		if added {
 			gc := g.chanState.lookupChannelForMsg(m)
 			if gc == nil && g.isInChannel(m) {
-				gc = g.chanState.joinChannel(string(msg.Channel), false)
+				gc = g.chanState.joinChannel(msg.ChainMac, chainState.ChainId, false)
 			}
 
 			if gc != nil {

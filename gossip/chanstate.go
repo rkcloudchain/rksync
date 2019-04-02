@@ -9,12 +9,14 @@ package gossip
 
 import (
 	"bytes"
+	"encoding/hex"
 	"sync"
 	"sync/atomic"
 
 	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/discovery"
+	"github.com/rkcloudchain/rksync/logging"
 	"github.com/rkcloudchain/rksync/protos"
 )
 
@@ -51,33 +53,25 @@ func (cs *channelState) isStopping() bool {
 }
 
 func (cs *channelState) lookupChannelForMsg(msg protos.ReceivedMessage) channel.Channel {
-	if msg.GetRKSyncMessage().IsStatePullRequestMsg() {
-		spr := msg.GetRKSyncMessage().GetStatePullRequest()
-		mac := spr.ChainMac
-		pkiID := msg.GetConnectionInfo().ID
-		return cs.getChannelByMAC(mac, pkiID)
+	if cs.isStopping() {
+		return nil
 	}
-	return cs.lookupChannelForRKSyncMsg(msg.GetRKSyncMessage().RKSyncMessage, msg.GetConnectionInfo().ID)
-}
-
-func (cs *channelState) lookupChannelForRKSyncMsg(msg *protos.RKSyncMessage, pkiID common.PKIidType) channel.Channel {
-	if !msg.IsChainStateMsg() {
-		return cs.getChannelByChainID(string(msg.Channel))
-	}
-	chainStateMsg := msg.GetState()
-	return cs.getChannelByMAC(chainStateMsg.ChainMac, pkiID)
-}
-
-func (cs *channelState) getChannelByMAC(receivedMAC []byte, pkiID common.PKIidType) channel.Channel {
 	cs.RLock()
 	defer cs.RUnlock()
-	for chanName, gc := range cs.channels {
-		mac := channel.GenerateMAC(pkiID, chanName)
-		if bytes.Equal(mac, receivedMAC) {
-			return gc
-		}
+
+	m := msg.GetRKSyncMessage()
+	mac := common.ChainMac(m.ChainMac)
+	return cs.channels[mac.String()]
+}
+
+func (cs *channelState) getChannelByMAC(chainMac common.ChainMac) channel.Channel {
+	if cs.isStopping() {
+		return nil
 	}
-	return nil
+	cs.RLock()
+	defer cs.RUnlock()
+
+	return cs.channels[chainMac.String()]
 }
 
 func (cs *channelState) getChannelByChainID(chainID string) channel.Channel {
@@ -86,36 +80,53 @@ func (cs *channelState) getChannelByChainID(chainID string) channel.Channel {
 	}
 	cs.RLock()
 	defer cs.RUnlock()
-	return cs.channels[chainID]
+
+	for key, gc := range cs.channels {
+		chainState := gc.Self()
+		chainInfo, err := chainState.GetChainStateInfo()
+		if err != nil {
+			logging.Warningf("Failed getting ChainStateInfo message: %s", err)
+			continue
+		}
+
+		mac := channel.GenerateMAC(chainInfo.Leader, chainID)
+		expectedMac, _ := hex.DecodeString(key)
+
+		if bytes.Equal(mac, expectedMac) {
+			return gc
+		}
+	}
+
+	return nil
 }
 
-func (cs *channelState) removeChannel(chainID string) {
+func (cs *channelState) removeChannel(chainMac common.ChainMac) {
 	if cs.isStopping() {
 		return
 	}
 	cs.Lock()
 	defer cs.Unlock()
 
-	gc, exists := cs.channels[chainID]
+	gc, exists := cs.channels[chainMac.String()]
 	if exists {
 		gc.Stop()
-		delete(cs.channels, chainID)
+		delete(cs.channels, chainMac.String())
 	}
 }
 
-func (cs *channelState) joinChannel(chainID string, leader bool) channel.Channel {
+func (cs *channelState) joinChannel(chainMac common.ChainMac, chainID string, leader bool) channel.Channel {
 	if cs.isStopping() {
 		return nil
 	}
 	cs.Lock()
 	defer cs.Unlock()
 
-	gc, exists := cs.channels[chainID]
+	gc, exists := cs.channels[chainMac.String()]
 	if !exists {
 		pkiID := cs.g.selfPKIid
 		ga := &gossipAdapterImpl{gossipService: cs.g, Discovery: cs.g.disc}
-		gc = channel.NewGossipChannel(pkiID, chainID, leader, ga, cs.g.idMapper)
-		cs.channels[chainID] = gc
+		gc = channel.NewGossipChannel(pkiID, chainMac, chainID, leader, ga, cs.g.idMapper)
+		cs.channels[chainMac.String()] = gc
 	}
 	return gc
 }

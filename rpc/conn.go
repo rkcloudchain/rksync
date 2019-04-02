@@ -51,17 +51,17 @@ func (cs *connectionStore) getConnection(peer *common.NetworkMember) (*connectio
 	endpoint := peer.Endpoint
 
 	cs.Lock()
-	destinationLock, hasConnected := cs.destinationLocks[string(pkiID)]
+	destinationLock, hasConnected := cs.destinationLocks[pkiID.String()]
 	if !hasConnected {
 		destinationLock = &sync.Mutex{}
-		cs.destinationLocks[string(pkiID)] = destinationLock
+		cs.destinationLocks[pkiID.String()] = destinationLock
 	}
 	cs.Unlock()
 
 	destinationLock.Lock()
 
 	cs.RLock()
-	conn, exists := cs.conns[string(pkiID)]
+	conn, exists := cs.conns[pkiID.String()]
 	if exists {
 		cs.RUnlock()
 		destinationLock.Unlock()
@@ -80,10 +80,10 @@ func (cs *connectionStore) getConnection(peer *common.NetworkMember) (*connectio
 	}
 
 	cs.Lock()
-	delete(cs.destinationLocks, string(pkiID))
+	delete(cs.destinationLocks, pkiID.String())
 	defer cs.Unlock()
 
-	conn, exists = cs.conns[string(pkiID)]
+	conn, exists = cs.conns[pkiID.String()]
 	if exists {
 		if createdConnection != nil {
 			createdConnection.close()
@@ -96,7 +96,7 @@ func (cs *connectionStore) getConnection(peer *common.NetworkMember) (*connectio
 	}
 
 	conn = createdConnection
-	cs.conns[string(createdConnection.info.ID)] = conn
+	cs.conns[createdConnection.info.ID.String()] = conn
 	go conn.serviceConnection()
 
 	return conn, nil
@@ -112,9 +112,9 @@ func (cs *connectionStore) closeConn(peer *common.NetworkMember) {
 	cs.Lock()
 	defer cs.Unlock()
 
-	if conn, exists := cs.conns[string(peer.PKIID)]; exists {
+	if conn, exists := cs.conns[peer.PKIID.String()]; exists {
 		conn.close()
-		delete(cs.conns, string(conn.info.ID))
+		delete(cs.conns, conn.info.ID.String())
 	}
 }
 
@@ -144,7 +144,7 @@ func (cs *connectionStore) onConnected(serverStream protos.RKSync_SyncStreamServ
 	cs.Lock()
 	defer cs.Unlock()
 
-	if c, exists := cs.conns[string(connInfo.ID)]; exists {
+	if c, exists := cs.conns[connInfo.ID.String()]; exists {
 		c.close()
 	}
 
@@ -154,16 +154,16 @@ func (cs *connectionStore) onConnected(serverStream protos.RKSync_SyncStreamServ
 func (cs *connectionStore) registerConn(connInfo *protos.ConnectionInfo, serverStream protos.RKSync_SyncStreamServer) *connection {
 	conn := newConnection(nil, nil, serverStream)
 	conn.info = connInfo
-	cs.conns[string(connInfo.ID)] = conn
+	cs.conns[connInfo.ID.String()] = conn
 	return conn
 }
 
 func (cs *connectionStore) closeByPKIid(pkiID common.PKIidType) {
 	cs.Lock()
 	defer cs.Unlock()
-	if conn, exists := cs.conns[string(pkiID)]; exists {
+	if conn, exists := cs.conns[pkiID.String()]; exists {
 		conn.close()
-		delete(cs.conns, string(pkiID))
+		delete(cs.conns, pkiID.String())
 	}
 }
 
