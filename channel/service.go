@@ -94,7 +94,7 @@ func (gc *gossipChannel) InitializeWithChainState(chainState *protos.ChainState)
 	}
 
 	for _, member := range stateInfo.Properties.Members {
-		gc.members[string(common.PKIidType(member))] = member
+		gc.members[common.PKIidType(member).String()] = member
 	}
 
 	for _, file := range stateInfo.Properties.Files {
@@ -121,7 +121,7 @@ func (gc *gossipChannel) Initialize(chainID string, members []common.PKIidType, 
 	}
 
 	for i, member := range members {
-		gc.members[string(common.PKIidType(member))] = member
+		gc.members[member.String()] = member
 		stateInfo.Properties.Members[i] = []byte(member)
 	}
 	for i, file := range files {
@@ -198,7 +198,7 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 	}
 
 	gc.chainStateMsg.Envelope = envp
-	gc.members[string(member)] = member
+	gc.members[member.String()] = member
 	return gc.chainStateMsg, nil
 }
 
@@ -411,7 +411,7 @@ func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.
 	gc.chainStateMsg = msg
 	gc.members = make(map[string]common.PKIidType)
 	for _, member := range csi.Properties.Members {
-		gc.members[string(member)] = member
+		gc.members[common.PKIidType(member).String()] = member
 	}
 
 	for _, file := range csi.Properties.Files {

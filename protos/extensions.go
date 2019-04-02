@@ -142,13 +142,13 @@ func chainStatMessageToString(chainMac []byte, cs *ChainState) string {
 }
 
 func chainStateInfoToString(csi *ChainStateInfo) string {
-	return fmt.Sprintf("Leader: %s, Properties: %s", string(csi.Leader), chainStateInfoPropertyToString(csi.Properties))
+	return fmt.Sprintf("Leader: %s, Properties: %s", common.PKIidType(csi.Leader).String(), chainStateInfoPropertyToString(csi.Properties))
 }
 
 func chainStateInfoPropertyToString(p *Properties) string {
 	buf := bytes.NewBufferString("Members: ")
 	for _, member := range p.Members {
-		buf.WriteString(string(member) + ",")
+		buf.WriteString(common.PKIidType(member).String() + ",")
 	}
 
 	buf.WriteString("Files: ")
