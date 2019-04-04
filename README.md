@@ -84,13 +84,13 @@ func main() {
     // FileSystem enables the rksync to communicate with file system.
     type FileSystem interface {
         // Create creates the named file
-        Create(chainID, filename string) (File, error)
+        Create(chainID, filename string, metadata []byte, leader bool) (File, error)
 
         // OpenFile opens a file using the given flags and the given mode.
-        OpenFile(chainID, filename string, flag int, perm os.FileMode) (File, error)
+        OpenFile(chainID, filename string, metadata []byte, flag int, perm os.FileMode, leader bool) (File, error)
 
         // Stat returns a FileInfo describing the named file.
-        Stat(chainID, filename string) (os.FileInfo, error)
+        Stat(chainID, filename string, metadata []byte, leader bool) (os.FileInfo, error)
     }
 
     // File represents a file in the filesystem
@@ -123,8 +123,8 @@ Once the service is started, you can do the corresponding operation:
 
     ```Go
     err = srv.CreateChannel("testchannel", []common.FileSyncInfo{
-        common.FileSyncInfo{Path: "file1.txt", Mode: "Append"},
-        common.FileSyncInfo{Path: "file2.txt", Mode: "Append"},
+        common.FileSyncInfo{Path: "file1.txt", Mode: "Append", Metadata: []byte{...}},
+        common.FileSyncInfo{Path: "file2.txt", Mode: "Append", Metadata: []byte{...}},
     })
     ```
 
@@ -137,7 +137,7 @@ Once the service is started, you can do the corresponding operation:
 * AddFileToChan
 
     ```Go
-    err = srv.AddFileToChan("testchannel", "file3.txt", "Append")
+    err = srv.AddFileToChan("testchannel", "file3.txt", "Append", []byte{...})
     ```
 
 ## Current State
