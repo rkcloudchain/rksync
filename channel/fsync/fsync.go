@@ -20,6 +20,7 @@ import (
 	"github.com/rkcloudchain/rksync/filter"
 	"github.com/rkcloudchain/rksync/logging"
 	"github.com/rkcloudchain/rksync/protos"
+	"github.com/rkcloudchain/rksync/util"
 )
 
 const (
@@ -34,24 +35,26 @@ type Adapter interface {
 	Sign(*protos.RKSyncMessage) (*protos.SignedRKSyncMessage, error)
 	GetMembership() []common.NetworkMember
 	IsMemberInChan(common.NetworkMember) bool
-	Accept(acceptor common.MessageAcceptor, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage)
+	Accept(acceptor common.MessageAcceptor, mac []byte, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage)
 }
 
 // NewFileSyncProvider creates FileSyncProvier instance
 func NewFileSyncProvider(chainMac common.ChainMac, chainID string, filename string, metadata []byte, mode protos.File_Mode, leader bool,
 	pkiID common.PKIidType, adapter Adapter) (*FileSyncProvier, error) {
 
+	mac := GenerateMAC(chainMac, filename)
+
 	msgChan, _ := adapter.Accept(func(message interface{}) bool {
 		return message.(*protos.RKSyncMessage).IsDataMsg() &&
 			bytes.Equal(message.(*protos.RKSyncMessage).ChainMac, chainMac) &&
 			bytes.Equal([]byte(message.(*protos.RKSyncMessage).GetDataMsg().FileName), []byte(filename))
-	}, false)
+	}, mac, false)
 
 	reqChan, _ := adapter.Accept(func(message interface{}) bool {
 		return message.(*protos.RKSyncMessage).IsDataReq() &&
 			bytes.Equal(message.(*protos.RKSyncMessage).ChainMac, chainMac) &&
 			bytes.Equal([]byte(message.(*protos.RKSyncMessage).GetDataReq().FileName), []byte(filename))
-	}, false)
+	}, mac, false)
 
 	p := &FileSyncProvier{
 		Adapter:  adapter,
@@ -401,4 +404,11 @@ func (p *FileSyncProvier) createDataAppendMsgRequest() (*protos.SignedRKSyncMess
 	}
 
 	return nil, errors.New("Unsupported file mode")
+}
+
+// GenerateMAC returns a byte slice that is derived from the channel's mac
+// and a file name
+func GenerateMAC(chainMac []byte, filename string) []byte {
+	raw := append(chainMac, []byte(filename)...)
+	return util.ComputeSHA3256(raw)
 }

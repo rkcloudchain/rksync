@@ -98,7 +98,7 @@ type gossipService struct {
 	*rpc.ChannelDeMultiplexer
 }
 
-func (g *gossipService) SelfChannelInfo(chainID string) *protos.ChainState {
+func (g *gossipService) SelfChainInfo(chainID string) *protos.ChainState {
 	ch := g.chanState.getChannelByChainID(chainID)
 	if ch == nil {
 		return nil
@@ -117,7 +117,7 @@ func (g *gossipService) Peers() []common.NetworkMember {
 	return g.disc.GetMembership()
 }
 
-func (g *gossipService) Accept(acceptor common.MessageAcceptor, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage) {
+func (g *gossipService) Accept(acceptor common.MessageAcceptor, mac []byte, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage) {
 	if passThrough {
 		return nil, g.srv.Accept(acceptor)
 	}
@@ -132,7 +132,7 @@ func (g *gossipService) Accept(acceptor common.MessageAcceptor, passThrough bool
 		return false
 	}
 
-	inCh := g.AddChannel(acceptByType)
+	inCh := g.AddChannelWithMAC(acceptByType, mac)
 	outCh := make(chan *protos.RKSyncMessage, acceptChanSize)
 	go func() {
 		for {
@@ -151,7 +151,7 @@ func (g *gossipService) Accept(acceptor common.MessageAcceptor, passThrough bool
 	return outCh, nil
 }
 
-func (g *gossipService) InitializeChannel(chainMac common.ChainMac, chainState *protos.ChainState) error {
+func (g *gossipService) InitializeChain(chainMac common.ChainMac, chainState *protos.ChainState) error {
 	if len(chainMac) == 0 {
 		return errors.New("Channel mac can't be nil or empty")
 	}
@@ -186,7 +186,7 @@ func (g *gossipService) InitializeChannel(chainMac common.ChainMac, chainState *
 	return gc.InitializeWithChainState(chainState)
 }
 
-func (g *gossipService) AddMemberToChan(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error) {
+func (g *gossipService) AddMemberToChain(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error) {
 	gc := g.chanState.getChannelByMAC(chainMac)
 	if gc == nil {
 		return nil, errors.Errorf("Channel %s not yet created", chainMac)
@@ -195,13 +195,22 @@ func (g *gossipService) AddMemberToChan(chainMac common.ChainMac, member common.
 	return gc.AddMember(member)
 }
 
-func (g *gossipService) AddFileToChan(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error) {
+func (g *gossipService) AddFileToChain(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error) {
 	gc := g.chanState.getChannelByMAC(chainMac)
 	if gc == nil {
 		return nil, errors.Errorf("Channel %s not yet created", chainMac)
 	}
 
 	return gc.AddFile(file)
+}
+
+func (g *gossipService) RemoveFileWithChain(chainMac common.ChainMac, filename string) (*protos.ChainState, error) {
+	gc := g.chanState.getChannelByMAC(chainMac)
+	if gc == nil {
+		return nil, errors.Errorf("Channel %s not yet created", chainMac)
+	}
+
+	return gc.RemoveFile(filename)
 }
 
 func (g *gossipService) GetPKIidOfCert(nodeID string, cert *x509.Certificate) (common.PKIidType, error) {
@@ -217,7 +226,7 @@ func (g *gossipService) GetPKIidOfCert(nodeID string, cert *x509.Certificate) (c
 	return digest, nil
 }
 
-func (g *gossipService) CreateChannel(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error) {
+func (g *gossipService) CreateChain(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error) {
 	if len(chainMac) == 0 {
 		return nil, errors.New("Channel mac can't be nil or empty")
 	}
@@ -236,7 +245,7 @@ func (g *gossipService) CreateChannel(chainMac common.ChainMac, chainID string, 
 	return gc.Initialize(chainID, []common.PKIidType{g.selfPKIid}, files)
 }
 
-func (g *gossipService) CloseChannel(chainMac common.ChainMac) {
+func (g *gossipService) CloseChain(chainMac common.ChainMac) {
 	if len(chainMac) == 0 {
 		return
 	}

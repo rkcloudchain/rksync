@@ -135,14 +135,14 @@ func (srv *Server) CreateChannel(chainID string, files []common.FileSyncInfo) er
 	}
 
 	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
-	chainState, err := srv.gossip.CreateChannel(mac, chainID, files)
+	chainState, err := srv.gossip.CreateChain(mac, chainID, files)
 	if err != nil {
 		return err
 	}
 
 	err = srv.rewriteChainConfigFile(mac, chainState)
 	if err != nil {
-		srv.gossip.CloseChannel(mac)
+		srv.gossip.CloseChain(mac)
 		return err
 	}
 
@@ -167,7 +167,7 @@ func (srv *Server) AddMemberToChan(chainID string, nodeID string, cert *x509.Cer
 	}
 
 	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
-	chainState, err := srv.gossip.AddMemberToChan(mac, pkiID)
+	chainState, err := srv.gossip.AddMemberToChain(mac, pkiID)
 	if err != nil {
 		return err
 	}
@@ -188,7 +188,25 @@ func (srv *Server) AddFileToChan(chainID string, filepath string, filemode strin
 	}
 
 	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
-	chainState, err := srv.gossip.AddFileToChan(mac, common.FileSyncInfo{Path: filepath, Mode: filemode, Metadata: metadata})
+	chainState, err := srv.gossip.AddFileToChain(mac, common.FileSyncInfo{Path: filepath, Mode: filemode, Metadata: metadata})
+	if err != nil {
+		return err
+	}
+
+	return srv.rewriteChainConfigFile(mac, chainState)
+}
+
+// RemoveFileWithChan removes file contained in the channel
+func (srv *Server) RemoveFileWithChan(chainID string, filename string) error {
+	if chainID == "" {
+		return errors.New("Channel ID must be provided")
+	}
+	if filename == "" {
+		return errors.New("File name must be provided")
+	}
+
+	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
+	chainState, err := srv.gossip.RemoveFileWithChain(mac, filename)
 	if err != nil {
 		return err
 	}
@@ -229,7 +247,7 @@ func (srv *Server) initializeChannel() {
 			continue
 		}
 
-		err = srv.gossip.InitializeChannel(common.ChainMac(mac), chainState)
+		err = srv.gossip.InitializeChain(common.ChainMac(mac), chainState)
 		if err != nil {
 			logging.Errorf("Error initializing channel %s: %s", dir, err)
 		}

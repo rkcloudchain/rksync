@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/rkcloudchain/rksync/channel/fsync"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/filter"
@@ -260,6 +261,49 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 	return gc.chainStateMsg, nil
 }
 
+func (gc *gossipChannel) RemoveFile(filename string) (*protos.ChainState, error) {
+	gc.Lock()
+	defer gc.Unlock()
+
+	msg, err := gc.chainStateMsg.Envelope.ToRKSyncMessage()
+	if err != nil {
+		return nil, err
+	}
+
+	if !msg.IsStateInfoMsg() {
+		return nil, errors.New("Channel state message isn't well formatted")
+	}
+
+	stateInfo := msg.GetStateInfo()
+	if !bytes.Equal(gc.pkiID, stateInfo.Leader) {
+		return nil, errors.New("Only the channel leader can modify the channel state")
+	}
+
+	n := len(stateInfo.Properties.Files)
+	for i := 0; i < n; i++ {
+		f := stateInfo.Properties.Files[i]
+		if f.Path == filename {
+			stateInfo.Properties.Files = append(stateInfo.Properties.Files[:i], stateInfo.Properties.Files[i+1:]...)
+			break
+		}
+	}
+
+	envp, err := msg.Sign(func(msg []byte) ([]byte, error) {
+		return gc.idMapper.Sign(msg)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	gc.chainStateMsg.Envelope = envp
+	gc.chainStateMsg.SeqNum = uint64(time.Now().UnixNano())
+
+	gc.fileState.closeFSyncProvider(filename)
+	gc.Unregister(fsync.GenerateMAC(gc.chainMac, filename))
+
+	return gc.chainStateMsg, nil
+}
+
 func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 	if !gc.verifyMsg(msg) {
 		logging.Warning("Failed verifying message:", msg.GetRKSyncMessage().RKSyncMessage)
@@ -431,6 +475,14 @@ func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.
 		gc.members[common.PKIidType(member).String()] = member
 	}
 
+	fnames := gc.fileState.snapshot()
+	for _, fname := range fnames {
+		has := contains(csi.Properties.Files, fname)
+		if !has {
+			gc.fileState.closeFSyncProvider(fname)
+			gc.Unregister(fsync.GenerateMAC(gc.chainMac, fname))
+		}
+	}
 	for _, file := range csi.Properties.Files {
 		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, false)
 		if err != nil {

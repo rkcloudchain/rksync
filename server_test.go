@@ -187,7 +187,7 @@ func TestRKSyncServiceServe(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	chainInfo := srv2.gossip.SelfChannelInfo("testchannel")
+	chainInfo := srv2.gossip.SelfChainInfo("testchannel")
 	assert.NotNil(t, chainInfo)
 
 	err = srv1.AddFileToChan("testchannel", "rfc2616.txt", "Append", []byte{})
@@ -235,6 +235,6 @@ func TestChannelInitialize(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	chainInfo := srv1.gossip.SelfChannelInfo("testchannel1")
+	chainInfo := srv1.gossip.SelfChainInfo("testchannel1")
 	assert.NotNil(t, chainInfo)
 }

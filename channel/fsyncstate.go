@@ -41,6 +41,35 @@ func (f *fsyncState) lookupFSyncProviderByFilename(filename string) *fsync.FileS
 	return f.files[filename]
 }
 
+func (f *fsyncState) closeFSyncProvider(filename string) {
+	if f.isStopping() {
+		return
+	}
+
+	f.Lock()
+	defer f.Unlock()
+
+	if fp, exists := f.files[filename]; exists {
+		fp.Stop()
+	}
+}
+
+func (f *fsyncState) snapshot() []string {
+	if f.isStopping() {
+		return nil
+	}
+
+	f.RLock()
+	defer f.RUnlock()
+
+	fnames := make([]string, 0)
+	for key := range f.files {
+		fnames = append(fnames, key)
+	}
+
+	return fnames
+}
+
 func (f *fsyncState) createProvider(filename string, mode protos.File_Mode, metadata []byte, leader bool) error {
 	if f.isStopping() {
 		return nil

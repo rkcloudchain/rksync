@@ -48,6 +48,9 @@ type Channel interface {
 	// AddFile adds file to the channel
 	AddFile(common.FileSyncInfo) (*protos.ChainState, error)
 
+	// RemoveFile removes file contained in the channel
+	RemoveFile(string) (*protos.ChainState, error)
+
 	// Stop the channel's activity
 	Stop()
 }
@@ -61,7 +64,8 @@ type Adapter interface {
 	GetMembership() []common.NetworkMember
 	Lookup(pkiID common.PKIidType) *common.NetworkMember
 	DeMultiplex(interface{})
-	Accept(acceptor common.MessageAcceptor, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage)
+	Unregister([]byte)
+	Accept(acceptor common.MessageAcceptor, mac []byte, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage)
 }
 
 // GenerateMAC returns a byte slice that is derived from the peer's PKI-ID
@@ -69,4 +73,13 @@ type Adapter interface {
 func GenerateMAC(pkiID common.PKIidType, channelID string) common.ChainMac {
 	preImage := append([]byte(pkiID), []byte(channelID)...)
 	return util.ComputeSHA3256(preImage)
+}
+
+func contains(files []*protos.File, target string) bool {
+	for _, file := range files {
+		if file.Path == target {
+			return true
+		}
+	}
+	return false
 }

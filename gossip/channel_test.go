@@ -40,14 +40,14 @@ func TestChannelInit(t *testing.T) {
 
 	fmt.Println("Create channel")
 	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "testchannel")
-	_, err = gossipSvc1.CreateChannel(mac, "testchannel", []common.FileSyncInfo{})
+	_, err = gossipSvc1.CreateChain(mac, "testchannel", []common.FileSyncInfo{})
 	assert.NoError(t, err)
 	fmt.Println("Add member to channel")
-	_, err = gossipSvc1.AddMemberToChan(mac, gossipSvc2.SelfPKIid())
+	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc2.SelfPKIid())
 	assert.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
-	selfChannelInfo := gossipSvc2.SelfChannelInfo("testchannel")
+	selfChannelInfo := gossipSvc2.SelfChainInfo("testchannel")
 	assert.NotNil(t, selfChannelInfo)
 	msg, err := selfChannelInfo.Envelope.ToRKSyncMessage()
 	assert.NoError(t, err)

@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package rpc
 
 import (
+	"bytes"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -18,6 +19,7 @@ import (
 // ChannelDeMultiplexer is a struct that can receive channel registrations
 type ChannelDeMultiplexer struct {
 	channels []*channel
+	seqNum   uint64
 	lock     sync.RWMutex
 	closed   bool
 }
@@ -30,6 +32,7 @@ func NewChannelDemultiplexer() *ChannelDeMultiplexer {
 type channel struct {
 	pred common.MessageAcceptor
 	ch   chan interface{}
+	mac  []byte
 }
 
 func (m *ChannelDeMultiplexer) isClosed() bool {
@@ -53,9 +56,47 @@ func (m *ChannelDeMultiplexer) AddChannel(predicate common.MessageAcceptor) <-ch
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	ch := &channel{ch: make(chan interface{}, 10), pred: predicate}
+	if m.isClosed() {
+		return nil
+	}
+
+	ch := &channel{ch: make(chan interface{}, 10), pred: predicate, mac: []byte{}}
 	m.channels = append(m.channels, ch)
 	return ch.ch
+}
+
+// AddChannelWithMAC registers a channel with a certain predicate and a byte slice
+func (m *ChannelDeMultiplexer) AddChannelWithMAC(predicate common.MessageAcceptor, mac []byte) <-chan interface{} {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if m.isClosed() {
+		return nil
+	}
+
+	ch := &channel{ch: make(chan interface{}, 10), pred: predicate, mac: mac}
+	m.channels = append(m.channels, ch)
+	return ch.ch
+}
+
+// Unregister closes a channel with a certain predicate
+func (m *ChannelDeMultiplexer) Unregister(mac []byte) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if m.isClosed() {
+		return
+	}
+
+	n := len(m.channels)
+	for i := 0; i < n; i++ {
+		ch := m.channels[i]
+		if bytes.Equal(mac, ch.mac) {
+			m.channels = append(m.channels[:i], m.channels[i+1:]...)
+			n--
+			i--
+		}
+	}
 }
 
 // DeMultiplex broadcasts the message to all channels that were returned

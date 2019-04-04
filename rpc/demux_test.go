@@ -54,3 +54,15 @@ func TestChannelDeMultiplexerBroadcasts(t *testing.T) {
 		t.Failed()
 	}
 }
+
+func TestUnregister(t *testing.T) {
+	demux := NewChannelDemultiplexer()
+	demux.AddChannelWithMAC(func(msg interface{}) bool { return true }, []byte{0})
+	demux.AddChannelWithMAC(func(msg interface{}) bool { return true }, []byte{0})
+	demux.AddChannelWithMAC(func(msg interface{}) bool { return true }, []byte{1})
+	demux.AddChannelWithMAC(func(msg interface{}) bool { return true }, []byte{1})
+	assert.Len(t, demux.channels, 4)
+
+	demux.Unregister([]byte{0})
+	assert.Len(t, demux.channels, 2)
+}

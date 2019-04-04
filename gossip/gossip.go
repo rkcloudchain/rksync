@@ -22,32 +22,35 @@ type Gossip interface {
 	// SelfPKIid returns the peer's PKI-ID
 	SelfPKIid() common.PKIidType
 
-	// SelfChannelInfo returns the peer's latest ChainState message of a given channel
-	SelfChannelInfo(chainID string) *protos.ChainState
+	// SelfChainInfo returns the peer's latest ChainState message of a given channel
+	SelfChainInfo(chainID string) *protos.ChainState
 
-	// AddMemberToChan adds member to channel
-	AddMemberToChan(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error)
+	// AddMemberToChain adds member to channel
+	AddMemberToChain(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error)
 
-	// AddFileToChan adds file to channel
-	AddFileToChan(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error)
+	// AddFileToChain adds file to channel
+	AddFileToChain(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error)
+
+	// RemoveFileWithChain removes file contained in the channel
+	RemoveFileWithChain(chainMac common.ChainMac, filename string) (*protos.ChainState, error)
 
 	// GetPKIidOfCert returns the PKI-ID of a certificate
 	GetPKIidOfCert(nodeID string, cert *x509.Certificate) (common.PKIidType, error)
 
-	// InitializeChannel initialize channel
-	InitializeChannel(chainMac common.ChainMac, chainState *protos.ChainState) error
+	// InitializeChain initialize channel
+	InitializeChain(chainMac common.ChainMac, chainState *protos.ChainState) error
 
-	// CreateChannel creates a channel
-	CreateChannel(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error)
+	// CreateChain creates a channel
+	CreateChain(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error)
 
-	// CloseChannel closes a channel
-	CloseChannel(chainMac common.ChainMac)
+	// CloseChain closes a channel
+	CloseChain(chainMac common.ChainMac)
 
 	// GetPeers returns the NetworkMembers considered alive
 	Peers() []common.NetworkMember
 
 	// Accept returns a dedicated read-only channel for messages sent by other nodes that match a certain predicate.
-	Accept(acceptor common.MessageAcceptor, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage)
+	Accept(acceptor common.MessageAcceptor, mac []byte, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage)
 
 	// Stop the gossip component
 	Stop()
