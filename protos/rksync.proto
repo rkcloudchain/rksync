@@ -112,6 +112,7 @@ message File {
         Random = 1;
     }
     Mode mode = 2;
+    bytes metadata = 3;
 }
 
 message ChainStatePullResponse {

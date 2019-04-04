@@ -287,13 +287,13 @@ func ClientKeepaliveOptions(ka *KeepaliveConfig) []grpc.DialOption {
 // FileSystem enables the rksync to communicate with file system.
 type FileSystem interface {
 	// Create creates the named file
-	Create(chainID, filename string) (File, error)
+	Create(chainID, filename string, metadata []byte, leader bool) (File, error)
 
 	// OpenFile opens a file using the given flags and the given mode.
-	OpenFile(chainID, filename string, flag int, perm os.FileMode) (File, error)
+	OpenFile(chainID, filename string, metadata []byte, flag int, perm os.FileMode, leader bool) (File, error)
 
 	// Stat returns a FileInfo describing the named file.
-	Stat(chainID, filename string) (os.FileInfo, error)
+	Stat(chainID, filename string, metadata []byte, leader bool) (os.FileInfo, error)
 }
 
 // File represents a file in the filesystem

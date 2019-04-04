@@ -38,8 +38,8 @@ type Adapter interface {
 }
 
 // NewFileSyncProvider creates FileSyncProvier instance
-func NewFileSyncProvider(chainMac common.ChainMac, chainID string, filename string, mode protos.File_Mode, leader bool, pkiID common.PKIidType,
-	adapter Adapter) (*FileSyncProvier, error) {
+func NewFileSyncProvider(chainMac common.ChainMac, chainID string, filename string, metadata []byte, mode protos.File_Mode, leader bool,
+	pkiID common.PKIidType, adapter Adapter) (*FileSyncProvier, error) {
 
 	msgChan, _ := adapter.Accept(func(message interface{}) bool {
 		return message.(*protos.RKSyncMessage).IsDataMsg() &&
@@ -58,6 +58,7 @@ func NewFileSyncProvider(chainMac common.ChainMac, chainID string, filename stri
 		chainMac: chainMac,
 		chainID:  chainID,
 		filename: filename,
+		metadata: metadata,
 		mode:     mode,
 		leader:   leader,
 		state:    int32(0),
@@ -91,6 +92,7 @@ type FileSyncProvier struct {
 	chainMac common.ChainMac
 	chainID  string
 	filename string
+	metadata []byte
 	state    int32
 	mode     protos.File_Mode
 	pkiID    common.PKIidType
@@ -105,14 +107,14 @@ type FileSyncProvier struct {
 
 func (p *FileSyncProvier) initPayloadBufferStart() (int64, error) {
 	fs := p.GetFileSystem()
-	fi, err := fs.Stat(p.chainID, p.filename)
+	fi, err := fs.Stat(p.chainID, p.filename, p.metadata, p.leader)
 	if err == nil {
 		return fi.Size(), nil
 	}
 
-	if os.IsNotExist(err) {
+	if !p.leader && os.IsNotExist(err) {
 		logging.Debugf("Channel %s file %s does not exists, create it", p.chainMac, p.filename)
-		f, err := fs.Create(p.chainID, p.filename)
+		f, err := fs.Create(p.chainID, p.filename, p.metadata, p.leader)
 		if err != nil {
 			logging.Errorf("Failed creating file %s (Channel %s): %s", p.filename, p.chainMac, err)
 			return 0, err
@@ -189,7 +191,7 @@ func (p *FileSyncProvier) processPayloads() {
 
 	logging.Debugf("[%s] Ready to process payloads, next payload start number is = [%d]", p.filename, p.payloads.Next())
 	fs := p.GetFileSystem()
-	f, err := fs.OpenFile(p.chainID, p.filename, os.O_WRONLY|os.O_APPEND, os.ModePerm)
+	f, err := fs.OpenFile(p.chainID, p.filename, p.metadata, os.O_WRONLY|os.O_APPEND, os.ModePerm, p.leader)
 	if err != nil {
 		logging.Errorf("Failed opening file %s (Channel %): %s", p.filename, p.chainMac, err)
 		return
@@ -267,7 +269,7 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 		}
 
 		appendReq := req.GetAppend()
-		fi, err := p.GetFileSystem().Stat(p.chainID, p.filename)
+		fi, err := p.GetFileSystem().Stat(p.chainID, p.filename, p.metadata, p.leader)
 		if err != nil {
 			logging.Warningf("Failed to stat file %s: %s", p.filename, err)
 			return
@@ -283,7 +285,7 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 		var n int
 
 		fs := p.GetFileSystem()
-		f, err := fs.OpenFile(p.chainID, p.filename, os.O_RDONLY, os.ModePerm)
+		f, err := fs.OpenFile(p.chainID, p.filename, p.metadata, os.O_RDONLY, os.ModePerm, p.leader)
 		if err != nil {
 			logging.Errorf("Failed opening file %s (Channel %s): %s", p.filename, p.chainMac, err)
 			return
@@ -371,7 +373,7 @@ func (p *FileSyncProvier) requestDataAppend() {
 }
 
 func (p *FileSyncProvier) createDataAppendMsgRequest() (*protos.SignedRKSyncMessage, error) {
-	fi, err := p.GetFileSystem().Stat(p.chainID, p.filename)
+	fi, err := p.GetFileSystem().Stat(p.chainID, p.filename, p.metadata, p.leader)
 	if err != nil {
 		logging.Warningf("Failed to stat file %s: %s", p.filename, err)
 		return nil, err

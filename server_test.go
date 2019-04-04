@@ -190,7 +190,7 @@ func TestRKSyncServiceServe(t *testing.T) {
 	chainInfo := srv2.gossip.SelfChannelInfo("testchannel")
 	assert.NotNil(t, chainInfo)
 
-	err = srv1.AddFileToChan("testchannel", "rfc2616.txt", "Append")
+	err = srv1.AddFileToChan("testchannel", "rfc2616.txt", "Append", []byte{})
 	assert.NoError(t, err)
 
 	time.Sleep(5 * time.Second)

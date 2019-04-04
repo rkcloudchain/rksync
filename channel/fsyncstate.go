@@ -41,7 +41,7 @@ func (f *fsyncState) lookupFSyncProviderByFilename(filename string) *fsync.FileS
 	return f.files[filename]
 }
 
-func (f *fsyncState) createProvider(filename string, mode protos.File_Mode, leader bool) error {
+func (f *fsyncState) createProvider(filename string, mode protos.File_Mode, metadata []byte, leader bool) error {
 	if f.isStopping() {
 		return nil
 	}
@@ -54,7 +54,7 @@ func (f *fsyncState) createProvider(filename string, mode protos.File_Mode, lead
 		chainMac := f.gc.chainMac
 		chainID := f.gc.chainID
 		fa := &fsyncAdapterImpl{gossipChannel: f.gc}
-		fs, err := fsync.NewFileSyncProvider(chainMac, chainID, filename, mode, leader, pkiID, fa)
+		fs, err := fsync.NewFileSyncProvider(chainMac, chainID, filename, metadata, mode, leader, pkiID, fa)
 		if err != nil {
 			return err
 		}

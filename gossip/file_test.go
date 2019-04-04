@@ -7,6 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 package gossip
 
 import (
+	"encoding/json"
+	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -107,4 +110,59 @@ func TestChainStateDynamicUpdate(t *testing.T) {
 	assert.NotNil(t, state)
 	assert.Len(t, state.Properties.Members, 2)
 	assert.Len(t, state.Properties.Files, 4)
+}
+
+type metadata struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+func createMetadata(name, typ string) []byte {
+	m := &metadata{Name: name, Type: typ}
+	bs, _ := json.Marshal(m)
+	return bs
+}
+
+func TestFileMetadata(t *testing.T) {
+	gossipSvc1, err := CreateGossipServer([]string{"localhost:9054"}, "localhost:9054", 0)
+	require.NoError(t, err)
+	defer gossipSvc1.Stop()
+
+	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "testchain")
+	_, err = gossipSvc1.CreateChannel(mac, "testchain", []common.FileSyncInfo{
+		common.FileSyncInfo{Path: "101.png", Mode: "Append", Metadata: createMetadata("101.png", "png")},
+		common.FileSyncInfo{Path: "config.yaml", Mode: "Append", Metadata: createMetadata("config.yaml", "yaml")},
+		common.FileSyncInfo{Path: "rfc2616.txt", Mode: "Append", Metadata: createMetadata("rfc2616.txt", "txt")},
+	})
+	assert.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	gossipSvc2, err := CreateGossipServer([]string{"localhost:9054"}, "localhost:10054", 1)
+	require.NoError(t, err)
+	defer gossipSvc2.Stop()
+
+	_, err = gossipSvc1.AddMemberToChan(mac, gossipSvc2.SelfPKIid())
+	assert.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	chain := gossipSvc2.SelfChannelInfo("testchain")
+	assert.NotNil(t, chain)
+
+	msg, err := chain.Envelope.ToRKSyncMessage()
+	assert.NoError(t, err)
+
+	state := msg.GetStateInfo()
+	assert.NotNil(t, state)
+	assert.Len(t, state.Properties.Members, 2)
+	assert.Len(t, state.Properties.Files, 3)
+
+	for _, f := range state.Properties.Files {
+		m := metadata{}
+		err := json.Unmarshal(f.Metadata, &m)
+		assert.NoError(t, err)
+		assert.Equal(t, f.Path, m.Name)
+		assert.Equal(t, filepath.Ext(f.Path), fmt.Sprintf(".%s", m.Type))
+	}
 }

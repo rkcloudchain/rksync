@@ -75,8 +75,9 @@ const (
 
 // FileSyncInfo defines a file sync mode
 type FileSyncInfo struct {
-	Path string
-	Mode string
+	Path     string
+	Mode     string
+	Metadata []byte
 }
 
 // ChainMac defines the identity representation of a chain

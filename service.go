@@ -176,7 +176,7 @@ func (srv *Server) AddMemberToChan(chainID string, nodeID string, cert *x509.Cer
 }
 
 // AddFileToChan adds a file to the channel
-func (srv *Server) AddFileToChan(chainID string, filepath string, filemode string) error {
+func (srv *Server) AddFileToChan(chainID string, filepath string, filemode string, metadata []byte) error {
 	if chainID == "" {
 		return errors.New("Channel ID must be provided")
 	}
@@ -188,7 +188,7 @@ func (srv *Server) AddFileToChan(chainID string, filepath string, filemode strin
 	}
 
 	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
-	chainState, err := srv.gossip.AddFileToChan(mac, common.FileSyncInfo{Path: filepath, Mode: filemode})
+	chainState, err := srv.gossip.AddFileToChan(mac, common.FileSyncInfo{Path: filepath, Mode: filemode, Metadata: metadata})
 	if err != nil {
 		return err
 	}
