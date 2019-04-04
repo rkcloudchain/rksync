@@ -189,6 +189,12 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 		return nil, errors.New("Only the channel leader can modify the channel state")
 	}
 
+	for _, m := range stateInfo.Properties.Members {
+		if bytes.Equal(member, common.PKIidType(m)) {
+			return gc.chainStateMsg, nil
+		}
+	}
+
 	stateInfo.Properties.Members = append(stateInfo.Properties.Members, member)
 	envp, err := msg.Sign(func(msg []byte) ([]byte, error) {
 		return gc.idMapper.Sign(msg)
@@ -198,7 +204,9 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 	}
 
 	gc.chainStateMsg.Envelope = envp
+	gc.chainStateMsg.SeqNum = uint64(time.Now().UnixNano())
 	gc.members[member.String()] = member
+
 	return gc.chainStateMsg, nil
 }
 
@@ -228,6 +236,13 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 	if !exists {
 		return nil, errors.Errorf("Unknow file mode: %s", file.Mode)
 	}
+
+	for _, f := range stateInfo.Properties.Files {
+		if f.Path == file.Path {
+			return gc.chainStateMsg, nil
+		}
+	}
+
 	f := &protos.File{Path: file.Path, Mode: protos.File_Mode(mode)}
 	stateInfo.Properties.Files = append(stateInfo.Properties.Files, f)
 
@@ -238,6 +253,7 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 		return nil, err
 	}
 	gc.chainStateMsg.Envelope = envp
+	gc.chainStateMsg.SeqNum = uint64(time.Now().UnixNano())
 
 	gc.fileState.createProvider(file.Path, protos.File_Mode(mode), true)
 	return gc.chainStateMsg, nil

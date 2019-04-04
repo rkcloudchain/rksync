@@ -23,9 +23,9 @@ import (
 )
 
 // DefaultGossipConfig returns a default gossip configuration
-func DefaultGossipConfig(endpoint string) *config.GossipConfig {
+func DefaultGossipConfig(bootstrap []string, endpoint string) *config.GossipConfig {
 	return &config.GossipConfig{
-		BootstrapPeers:             []string{"localhost:9053"},
+		BootstrapPeers:             bootstrap,
 		Endpoint:                   endpoint,
 		PropagateIterations:        1,
 		PropagatePeerNum:           3,

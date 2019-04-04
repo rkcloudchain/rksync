@@ -383,7 +383,12 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 
 		mac := channel.GenerateMAC(chainInfo.Leader, chainState.ChainId)
 		if !bytes.Equal(mac, msg.ChainMac) {
-			logging.Warningf("ChainState message has an invalid MAC, expected %s, got %s, sent from %s", common.ChainMac(msg.ChainMac), mac, m.GetConnectionInfo().ID)
+			logging.Warningf("ChainState (%s) message has an invalid MAC, expected %s, got %s, leader: %s, sent from %s",
+				chainState.ChainId,
+				mac,
+				common.ChainMac(msg.ChainMac),
+				common.PKIidType(chainInfo.Leader),
+				m.GetConnectionInfo().ID)
 			return
 		}
 
