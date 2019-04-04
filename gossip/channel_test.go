@@ -8,7 +8,6 @@ package gossip
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -17,64 +16,20 @@ import (
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/config"
 	"github.com/rkcloudchain/rksync/server"
+	"github.com/rkcloudchain/rksync/tests/mocks"
 	"github.com/rkcloudchain/rksync/tests/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
-var idCfg1 *config.IdentityConfig
-var idCfg2 *config.IdentityConfig
-
-func TestMain(m *testing.M) {
-	home1, err := filepath.Abs("../tests/fixtures/identity/peer0")
-	if err != nil {
-		fmt.Printf("Abs failed: %s\n", err)
-		os.Exit(-1)
-	}
-
-	idCfg1 = &config.IdentityConfig{
-		ID: "peer0.org1",
-	}
-	err = idCfg1.MakeFilesAbs(home1)
-	if err != nil {
-		fmt.Printf("MakeFilesAbs failed: %s\n", err)
-		os.Exit(-1)
-	}
-
-	home2, err := filepath.Abs("../tests/fixtures/identity/peer1")
-	if err != nil {
-		fmt.Printf("Abs failed: %s\n", err)
-		os.Exit(-1)
-	}
-
-	idCfg2 = &config.IdentityConfig{
-		ID: "peer1.org2",
-	}
-	err = idCfg2.MakeFilesAbs(home2)
-	if err != nil {
-		fmt.Printf("MakeFilesAbs failed: %s\n", err)
-		os.Exit(-1)
-	}
-
-	os.Exit(m.Run())
-}
-
 func TestChannelInit(t *testing.T) {
-	selfIdentity1, _ := util.GetIdentity(idCfg1)
-	selfIdentity2, _ := util.GetIdentity(idCfg2)
-
-	srv1, _ := CreateGRPCServer("localhost:9053")
-	srv2, _ := CreateGRPCServer("localhost:10053")
-
-	gossipSvc1, err := NewGossipService(util.DefaultGossipConfig("localhost:9053"), idCfg1, srv1.Server(), selfIdentity1, secureDialOpts)
+	gossipSvc1, err := CreateGossipServer([]string{"localhost:9053"}, "localhost:9053", 0)
 	require.NoError(t, err)
-	go srv1.Start()
 	defer gossipSvc1.Stop()
 
-	gossipSvc2, err := NewGossipService(util.DefaultGossipConfig("localhost:10053"), idCfg2, srv2.Server(), selfIdentity2, secureDialOpts)
+	gossipSvc2, err := CreateGossipServer([]string{"localhost:9053"}, "localhost:10053", 1)
 	require.NoError(t, err)
-	go srv2.Start()
 	defer gossipSvc2.Stop()
 
 	time.Sleep(5 * time.Second)
@@ -114,6 +69,47 @@ func secureDialOpts() []grpc.DialOption {
 	dialOpts = append(dialOpts, grpc.WithInsecure())
 
 	return dialOpts
+}
+
+// CreateGossipServer creates a gossip server
+func CreateGossipServer(bootstrap []string, address string, num int) (Gossip, error) {
+	home, err := filepath.Abs(fmt.Sprintf("../tests/fixtures/identity/peer%d", num))
+	if err != nil {
+		return nil, err
+	}
+
+	idCfg := &config.IdentityConfig{
+		ID: fmt.Sprintf("peer%d.org%d", num, num+1),
+	}
+	err = idCfg.MakeFilesAbs(home)
+	if err != nil {
+		return nil, err
+	}
+
+	selfIdentity, err := util.GetIdentity(idCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	gsrv, err := CreateGRPCServer(address)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := util.DefaultGossipConfig(bootstrap, address)
+	p, err := filepath.Abs("../tests/testdata")
+	if err != nil {
+		return nil, err
+	}
+	cfg.FileSystem = mocks.NewFSMock(filepath.Join(p, fmt.Sprintf("peer%d", num)))
+
+	gossipSrv, err := NewGossipService(cfg, idCfg, gsrv.Server(), selfIdentity, secureDialOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	go gsrv.Start()
+	return gossipSrv, nil
 }
 
 // CreateGRPCServer creates a new grpc server
