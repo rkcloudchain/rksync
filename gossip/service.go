@@ -264,10 +264,21 @@ func (g *gossipService) CloseChain(chainMac common.ChainMac, notify bool) error 
 		return errors.Errorf("Failed to find channel with mac: %s", chainMac)
 	}
 	chainState := gc.Self()
-	chainInfo, err := chainState.GetChainStateInfo()
+	msg, err := chainState.Envelope.ToRKSyncMessage()
 	if err != nil {
-		return errors.Errorf("Failed to unmarshal ChainStateInfo message: %s", err)
+		return err
 	}
+	if !msg.IsStateInfoMsg() {
+		return errors.New("Channel state message isn't well formatted")
+	}
+	err = msg.Verify(g.selfPKIid, func(peerIdentity []byte, signature, message []byte) error {
+		return g.idMapper.Verify(peerIdentity, signature, message)
+	})
+	if err != nil {
+		return errors.Wrap(err, "Failed verifying ChainStateInfo message")
+	}
+
+	chainInfo := msg.GetStateInfo()
 	if !bytes.Equal(g.selfPKIid, common.PKIidType(chainInfo.Leader)) {
 		return errors.New("Only the channel leader can close the channel")
 	}

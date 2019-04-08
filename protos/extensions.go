@@ -349,7 +349,7 @@ func (m *ChainState) GetChainStateInfo() (*ChainStateInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !msg.RKSyncMessage.IsStateInfoMsg() {
+	if !msg.IsStateInfoMsg() {
 		return nil, errors.New("Failed to unmarshal ChainStateInfo message")
 	}
 

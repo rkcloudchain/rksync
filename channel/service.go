@@ -494,19 +494,6 @@ func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.
 	gc.Lock()
 	defer gc.Unlock()
 
-	if gc.chainStateMsg != nil {
-		oldMsg, err := gc.chainStateMsg.Envelope.ToRKSyncMessage()
-		if err != nil {
-			logging.Errorf("Failed unmarshalling channel state message: %s", err)
-			return err
-		}
-
-		if !bytes.Equal(oldMsg.GetStateInfo().Leader, csi.Leader) {
-			logging.Warningf("Channel %s: Leader has been changed, original %s, now is %s", gc.chainMac, common.PKIidType(oldMsg.GetStateInfo().Leader), common.PKIidType(csi.Leader))
-			return errors.New("Channel's leader has been changed")
-		}
-	}
-
 	gc.chainStateMsg = msg
 	gc.members = make(map[string]common.PKIidType)
 	for _, member := range csi.Properties.Members {
@@ -682,6 +669,12 @@ func (gc *gossipChannel) validateChainLeader() (*protos.SignedRKSyncMessage, *pr
 
 	if !msg.IsStateInfoMsg() {
 		return nil, nil, errors.New("Channel state message isn't well formatted")
+	}
+	err = msg.Verify(gc.pkiID, func(peerIdentity []byte, signature, message []byte) error {
+		return gc.idMapper.Verify(peerIdentity, signature, message)
+	})
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Failed verifying ChainStateInfo message")
 	}
 
 	stateInfo := msg.GetStateInfo()
