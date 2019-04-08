@@ -30,13 +30,6 @@ func (p PKIidType) IsNotSameFilter(that PKIidType) bool {
 	return !bytes.Equal(p, that)
 }
 
-// IsSameFilter generate filter function which provides
-// a predicate to identify whenever current id equals
-// to another one.
-func (p PKIidType) IsSameFilter(that PKIidType) bool {
-	return bytes.Equal(p, that)
-}
-
 // PeerIdentityType is the peer's certificate
 type PeerIdentityType []byte
 

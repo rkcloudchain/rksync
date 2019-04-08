@@ -102,9 +102,9 @@ func (cs *channelState) getChannelByChainID(chainID string) channel.Channel {
 	return nil
 }
 
-func (cs *channelState) removeChannel(chainMac common.ChainMac) {
+func (cs *channelState) closeChannel(chainMac common.ChainMac) bool {
 	if cs.isStopping() {
-		return
+		return false
 	}
 	cs.Lock()
 	defer cs.Unlock()
@@ -113,7 +113,10 @@ func (cs *channelState) removeChannel(chainMac common.ChainMac) {
 	if exists {
 		gc.Stop()
 		delete(cs.channels, chainMac.String())
+		return true
 	}
+
+	return false
 }
 
 func (cs *channelState) joinChannel(chainMac common.ChainMac, chainID string, leader bool) channel.Channel {

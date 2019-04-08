@@ -142,11 +142,27 @@ func (srv *Server) CreateChannel(chainID string, files []common.FileSyncInfo) er
 
 	err = srv.rewriteChainConfigFile(mac, chainState)
 	if err != nil {
-		srv.gossip.CloseChain(mac)
+		srv.gossip.CloseChain(mac, false)
 		return err
 	}
 
 	return nil
+}
+
+// CloseChannel closes an channel
+func (srv *Server) CloseChannel(chainID string) error {
+	if chainID == "" {
+		return errors.New("Channel ID must be provided")
+	}
+
+	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
+	err := srv.gossip.CloseChain(mac, true)
+	if err != nil {
+		return err
+	}
+
+	dir := filepath.Join(srv.chainFilePath, mac.String())
+	return os.RemoveAll(dir)
 }
 
 // AddMemberToChan adds a member to the channel

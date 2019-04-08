@@ -47,7 +47,10 @@ type Gossip interface {
 	CreateChain(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error)
 
 	// CloseChain closes a channel
-	CloseChain(chainMac common.ChainMac)
+	CloseChain(chainMac common.ChainMac, notify bool) error
+
+	// CreateLeaveChainMessage creates LeaveChainMessage for channel
+	CreateLeaveChainMessage(chainMac common.ChainMac) (*protos.SignedRKSyncMessage, error)
 
 	// GetPeers returns the NetworkMembers considered alive
 	Peers() []common.NetworkMember

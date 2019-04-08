@@ -54,3 +54,19 @@ func SelectPeers(k int, peerPool []common.NetworkMember, filter RoutingFilter) [
 	}
 	return res
 }
+
+// SelectAllPeers returns all peers match the routing filter
+func SelectAllPeers(peerPool []common.NetworkMember, filter RoutingFilter) []*common.NetworkMember {
+	var res []*common.NetworkMember
+
+	for _, peer := range peerPool {
+		if !filter(peer) {
+			continue
+		}
+
+		p := &common.NetworkMember{PKIID: peer.PKIID, Endpoint: peer.Endpoint}
+		res = append(res, p)
+	}
+
+	return res
+}

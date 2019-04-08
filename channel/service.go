@@ -240,17 +240,14 @@ func (gc *gossipChannel) RemoveMember(member common.PKIidType) (*protos.ChainSta
 	gc.chainStateMsg.Envelope = envp
 	gc.chainStateMsg.SeqNum = uint64(time.Now().UnixNano())
 	delete(gc.members, member.String())
-	go func() {
-		peers := filter.SelectPeers(1, gc.GetMembership(), func(nm common.NetworkMember) bool {
-			return member.IsSameFilter(nm.PKIID)
-		})
-		if len(peers) == 0 {
-			logging.Warningf("RemoveMember: No matching peer found %s", member)
-			return
-		}
 
-		gc.sendLeaveChainMessage(peers[0])
-	}()
+	filterFunc := func(nm common.NetworkMember) bool {
+		return bytes.Equal(nm.PKIID, member)
+	}
+	peers := filter.SelectAllPeers(gc.GetMembership(), filterFunc)
+	if len(peers) > 0 {
+		go gc.sendLeaveChainMessage(peers[0])
+	}
 
 	return gc.chainStateMsg, nil
 }
@@ -665,7 +662,7 @@ func (gc *gossipChannel) createStateInfoRequest() (*protos.SignedRKSyncMessage, 
 }
 
 func (gc *gossipChannel) sendLeaveChainMessage(member *common.NetworkMember) {
-	msg, err := gc.createLeaveChainMessage()
+	msg, err := gc.CreateLeaveChainMessage(gc.chainMac)
 	if err != nil {
 		logging.Errorf("Failed creating LeaveChainMessage: %s", err)
 		return
@@ -675,32 +672,6 @@ func (gc *gossipChannel) sendLeaveChainMessage(member *common.NetworkMember) {
 	if err != nil {
 		logging.Errorf("Failed sending LeaveChainMessage to %s: %s", member, err)
 	}
-}
-
-func (gc *gossipChannel) createLeaveChainMessage() (*protos.SignedRKSyncMessage, error) {
-	msg := &protos.SignedRKSyncMessage{
-		RKSyncMessage: &protos.RKSyncMessage{
-			ChainMac: gc.chainMac,
-			Tag:      protos.RKSyncMessage_CHAN_ONLY,
-			Nonce:    0,
-			Content: &protos.RKSyncMessage_LeaveChain{
-				LeaveChain: &protos.LeaveChainMessage{
-					ChainMac: gc.chainMac,
-				},
-			},
-		},
-	}
-
-	_, err := msg.Sign(func(msg []byte) ([]byte, error) {
-		return gc.idMapper.Sign(msg)
-	})
-
-	if err != nil {
-		logging.Errorf("Failed signing LeaveChainMessage: %v", err)
-		return nil, err
-	}
-
-	return msg, nil
 }
 
 func (gc *gossipChannel) validateChainLeader() (*protos.SignedRKSyncMessage, *protos.ChainStateInfo, error) {

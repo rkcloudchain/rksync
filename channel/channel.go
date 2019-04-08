@@ -70,6 +70,7 @@ type Adapter interface {
 	DeMultiplex(interface{})
 	Unregister([]byte)
 	Accept(acceptor common.MessageAcceptor, mac []byte, passThrough bool) (<-chan *protos.RKSyncMessage, <-chan protos.ReceivedMessage)
+	CreateLeaveChainMessage(chainMac common.ChainMac) (*protos.SignedRKSyncMessage, error)
 }
 
 // GenerateMAC returns a byte slice that is derived from the peer's PKI-ID

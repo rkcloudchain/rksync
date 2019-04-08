@@ -254,12 +254,57 @@ func (g *gossipService) CreateChain(chainMac common.ChainMac, chainID string, fi
 	return gc.Initialize(chainID, []common.PKIidType{g.selfPKIid}, files)
 }
 
-func (g *gossipService) CloseChain(chainMac common.ChainMac) {
+func (g *gossipService) CloseChain(chainMac common.ChainMac, notify bool) error {
 	if len(chainMac) == 0 {
-		return
+		return errors.New("Chain mac can't be nil or empty")
 	}
 
-	g.chanState.removeChannel(chainMac)
+	gc := g.chanState.getChannelByMAC(chainMac)
+	if gc == nil {
+		return errors.Errorf("Failed to find channel with mac: %s", chainMac)
+	}
+	chainState := gc.Self()
+	chainInfo, err := chainState.GetChainStateInfo()
+	if err != nil {
+		return errors.Errorf("Failed to unmarshal ChainStateInfo message: %s", err)
+	}
+	if !bytes.Equal(g.selfPKIid, common.PKIidType(chainInfo.Leader)) {
+		return errors.New("Only the channel leader can close the channel")
+	}
+	filterFunc := gc.IsMemberInChan
+
+	closed := g.chanState.closeChannel(chainMac)
+	if notify && closed {
+		peers := filter.SelectAllPeers(g.disc.GetMembership(), filterFunc)
+		go g.publishLeaveChainMsg(chainMac, peers...)
+	}
+	return nil
+}
+
+func (g *gossipService) CreateLeaveChainMessage(chainMac common.ChainMac) (*protos.SignedRKSyncMessage, error) {
+	msg := &protos.SignedRKSyncMessage{
+		RKSyncMessage: &protos.RKSyncMessage{
+			ChainMac: chainMac,
+			Tag:      protos.RKSyncMessage_CHAN_ONLY,
+			Nonce:    0,
+			Content: &protos.RKSyncMessage_LeaveChain{
+				LeaveChain: &protos.LeaveChainMessage{
+					ChainMac: chainMac,
+				},
+			},
+		},
+	}
+
+	_, err := msg.Sign(func(msg []byte) ([]byte, error) {
+		return g.idMapper.Sign(msg)
+	})
+
+	if err != nil {
+		logging.Errorf("Failed signing LeaveChainMessage: %v", err)
+		return nil, err
+	}
+
+	return msg, nil
 }
 
 func (g *gossipService) Stop() {
@@ -284,6 +329,26 @@ func (g *gossipService) selfNetworkMember() common.NetworkMember {
 	return common.NetworkMember{
 		Endpoint: g.conf.Endpoint,
 		PKIID:    g.srv.GetPKIid(),
+	}
+}
+
+func (g *gossipService) publishLeaveChainMsg(chainMac common.ChainMac, peers ...*common.NetworkMember) {
+	msg, err := g.CreateLeaveChainMessage(chainMac)
+	if err != nil {
+		logging.Errorf("Failed creating LeaveChainMessage for channel %s: %s", chainMac, err)
+		return
+	}
+
+	results := g.srv.SendWithAck(msg, 10*time.Second, len(peers), peers...)
+	for _, res := range results {
+		if res.Error() == "" {
+			continue
+		}
+		logging.Warningf("Failed sending to %s, error: %s", res.Endpoint, res.Error())
+	}
+
+	if results.AckCount() < len(peers) {
+		logging.Errorf("Publish LeaveChainMessage occurred error(s): %s", results.String())
 	}
 }
 
@@ -452,7 +517,7 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 			return
 		}
 
-		g.chanState.removeChannel(chainMac)
+		g.chanState.closeChannel(chainMac)
 		m.Ack(nil)
 		return
 	}
