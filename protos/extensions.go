@@ -315,6 +315,11 @@ func (m *RKSyncMessage) IsDataReq() bool {
 	return m.GetDataReq() != nil
 }
 
+// IsLeaveChain returns whether RKSyncMessage is a leave chain message
+func (m *RKSyncMessage) IsLeaveChain() bool {
+	return m.GetLeaveChain() != nil
+}
+
 // IsTagLegal checks the RKSyncMessage tags and inner type
 func (m *RKSyncMessage) IsTagLegal() error {
 	if m.IsAliveMsg() || m.GetMemReq() != nil || m.GetMemRes() != nil {
@@ -323,7 +328,7 @@ func (m *RKSyncMessage) IsTagLegal() error {
 		}
 		return nil
 	}
-	if m.IsDataMsg() || m.IsDataReq() || m.IsChainStateMsg() || m.IsStatePullRequestMsg() || m.IsStatePullResponseMsg() {
+	if m.IsDataMsg() || m.IsDataReq() || m.IsChainStateMsg() || m.IsStatePullRequestMsg() || m.IsStatePullResponseMsg() || m.IsLeaveChain() {
 		if m.Tag != RKSyncMessage_CHAN_ONLY {
 			return fmt.Errorf("Tag should be %s", RKSyncMessage_Tag_name[int32(RKSyncMessage_CHAN_ONLY)])
 		}

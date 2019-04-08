@@ -45,6 +45,9 @@ type Channel interface {
 	// AddMember adds member to the channel
 	AddMember(common.PKIidType) (*protos.ChainState, error)
 
+	// RemoveMember removes member contained in the channel
+	RemoveMember(common.PKIidType) (*protos.ChainState, error)
+
 	// AddFile adds file to the channel
 	AddFile(common.FileSyncInfo) (*protos.ChainState, error)
 
@@ -61,6 +64,7 @@ type Adapter interface {
 	Gossip(message *protos.SignedRKSyncMessage)
 	Forward(message protos.ReceivedMessage)
 	Send(message *protos.SignedRKSyncMessage, peers ...*common.NetworkMember)
+	SendWithAck(message *protos.SignedRKSyncMessage, timeout time.Duration, minAck int, peers ...*common.NetworkMember) error
 	GetMembership() []common.NetworkMember
 	Lookup(pkiID common.PKIidType) *common.NetworkMember
 	DeMultiplex(interface{})

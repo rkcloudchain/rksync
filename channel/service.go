@@ -177,18 +177,9 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 	gc.Lock()
 	defer gc.Unlock()
 
-	msg, err := gc.chainStateMsg.Envelope.ToRKSyncMessage()
+	msg, stateInfo, err := gc.validateChainLeader()
 	if err != nil {
 		return nil, err
-	}
-
-	if !msg.IsStateInfoMsg() {
-		return nil, errors.New("Channel state message isn't well formatted")
-	}
-
-	stateInfo := msg.GetStateInfo()
-	if !bytes.Equal(gc.pkiID, stateInfo.Leader) {
-		return nil, errors.New("Only the channel leader can modify the channel state")
 	}
 
 	for _, m := range stateInfo.Properties.Members {
@@ -212,6 +203,58 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 	return gc.chainStateMsg, nil
 }
 
+func (gc *gossipChannel) RemoveMember(member common.PKIidType) (*protos.ChainState, error) {
+	gc.Lock()
+	defer gc.Unlock()
+
+	msg, stateInfo, err := gc.validateChainLeader()
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(member, common.PKIidType(stateInfo.Leader)) {
+		return nil, errors.New("Can't remove youself out of the channel")
+	}
+
+	var found bool
+	n := len(stateInfo.Properties.Members)
+	for i := 0; i < n; i++ {
+		m := stateInfo.Properties.Members[i]
+		if bytes.Equal(member, common.PKIidType(m)) {
+			stateInfo.Properties.Members = append(stateInfo.Properties.Members[:i], stateInfo.Properties.Members[i+1:]...)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return gc.chainStateMsg, nil
+	}
+
+	envp, err := msg.Sign(func(msg []byte) ([]byte, error) {
+		return gc.idMapper.Sign(msg)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	gc.chainStateMsg.Envelope = envp
+	gc.chainStateMsg.SeqNum = uint64(time.Now().UnixNano())
+	delete(gc.members, member.String())
+	go func() {
+		peers := filter.SelectPeers(1, gc.GetMembership(), func(nm common.NetworkMember) bool {
+			return member.IsSameFilter(nm.PKIID)
+		})
+		if len(peers) == 0 {
+			logging.Warningf("RemoveMember: No matching peer found %s", member)
+			return
+		}
+
+		gc.sendLeaveChainMessage(peers[0])
+	}()
+
+	return gc.chainStateMsg, nil
+}
+
 func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, error) {
 	if gc.fileState.lookupFSyncProviderByFilename(file.Path) != nil {
 		return nil, errors.Errorf("File %s has already exists ", file.Path)
@@ -220,18 +263,9 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 	gc.Lock()
 	defer gc.Unlock()
 
-	msg, err := gc.chainStateMsg.Envelope.ToRKSyncMessage()
+	msg, stateInfo, err := gc.validateChainLeader()
 	if err != nil {
 		return nil, err
-	}
-
-	if !msg.IsStateInfoMsg() {
-		return nil, errors.New("Channel state message isn't well formatted")
-	}
-
-	stateInfo := msg.GetStateInfo()
-	if !bytes.Equal(gc.pkiID, stateInfo.Leader) {
-		return nil, errors.New("Only the channel leader can modify the channel state")
 	}
 
 	mode, exists := protos.File_Mode_value[file.Mode]
@@ -265,27 +299,24 @@ func (gc *gossipChannel) RemoveFile(filename string) (*protos.ChainState, error)
 	gc.Lock()
 	defer gc.Unlock()
 
-	msg, err := gc.chainStateMsg.Envelope.ToRKSyncMessage()
+	msg, stateInfo, err := gc.validateChainLeader()
 	if err != nil {
 		return nil, err
 	}
 
-	if !msg.IsStateInfoMsg() {
-		return nil, errors.New("Channel state message isn't well formatted")
-	}
-
-	stateInfo := msg.GetStateInfo()
-	if !bytes.Equal(gc.pkiID, stateInfo.Leader) {
-		return nil, errors.New("Only the channel leader can modify the channel state")
-	}
-
+	var found bool
 	n := len(stateInfo.Properties.Files)
 	for i := 0; i < n; i++ {
 		f := stateInfo.Properties.Files[i]
 		if f.Path == filename {
 			stateInfo.Properties.Files = append(stateInfo.Properties.Files[:i], stateInfo.Properties.Files[i+1:]...)
+			found = true
 			break
 		}
+	}
+
+	if !found {
+		return gc.chainStateMsg, nil
 	}
 
 	envp, err := msg.Sign(func(msg []byte) ([]byte, error) {
@@ -317,7 +348,10 @@ func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 	}
 
 	if m.IsStatePullRequestMsg() {
-		if gc.msgStore.Add(m) {
+		member := common.NetworkMember{Endpoint: msg.GetConnectionInfo().Endpoint, PKIID: msg.GetConnectionInfo().ID}
+		if !gc.IsMemberInChan(member) {
+			go gc.sendLeaveChainMessage(&member)
+		} else if gc.msgStore.Add(m) {
 			resp, err := gc.createChainStateResponse()
 			if err != nil {
 				logging.Errorf("Failed creating ChainStateResponse message: %v", err)
@@ -349,6 +383,13 @@ func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 	}
 
 	if m.IsDataMsg() || m.IsDataReq() {
+		if m.IsDataReq() {
+			if !gc.IsMemberInChan(common.NetworkMember{PKIID: msg.GetConnectionInfo().ID}) {
+				logging.Warningf("Received Data request message from %s, not member in channel %s", msg.GetConnectionInfo().ID, gc.chainMac)
+				return
+			}
+		}
+
 		if m.IsDataMsg() {
 			if gc.leader {
 				logging.Infof("Channel %s: Leader does not need to handle data message", gc.chainMac)
@@ -621,4 +662,61 @@ func (gc *gossipChannel) createStateInfoRequest() (*protos.SignedRKSyncMessage, 
 			},
 		},
 	}).NoopSign()
+}
+
+func (gc *gossipChannel) sendLeaveChainMessage(member *common.NetworkMember) {
+	msg, err := gc.createLeaveChainMessage()
+	if err != nil {
+		logging.Errorf("Failed creating LeaveChainMessage: %s", err)
+		return
+	}
+
+	err = gc.SendWithAck(msg, time.Second*5, 1, member)
+	if err != nil {
+		logging.Errorf("Failed sending LeaveChainMessage to %s: %s", member, err)
+	}
+}
+
+func (gc *gossipChannel) createLeaveChainMessage() (*protos.SignedRKSyncMessage, error) {
+	msg := &protos.SignedRKSyncMessage{
+		RKSyncMessage: &protos.RKSyncMessage{
+			ChainMac: gc.chainMac,
+			Tag:      protos.RKSyncMessage_CHAN_ONLY,
+			Nonce:    0,
+			Content: &protos.RKSyncMessage_LeaveChain{
+				LeaveChain: &protos.LeaveChainMessage{
+					ChainMac: gc.chainMac,
+				},
+			},
+		},
+	}
+
+	_, err := msg.Sign(func(msg []byte) ([]byte, error) {
+		return gc.idMapper.Sign(msg)
+	})
+
+	if err != nil {
+		logging.Errorf("Failed signing LeaveChainMessage: %v", err)
+		return nil, err
+	}
+
+	return msg, nil
+}
+
+func (gc *gossipChannel) validateChainLeader() (*protos.SignedRKSyncMessage, *protos.ChainStateInfo, error) {
+	msg, err := gc.chainStateMsg.Envelope.ToRKSyncMessage()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !msg.IsStateInfoMsg() {
+		return nil, nil, errors.New("Channel state message isn't well formatted")
+	}
+
+	stateInfo := msg.GetStateInfo()
+	if !bytes.Equal(gc.pkiID, stateInfo.Leader) {
+		return nil, nil, errors.New("Only the channel leader can modify the channel state")
+	}
+
+	return msg, stateInfo, nil
 }

@@ -51,6 +51,7 @@ message RKSyncMessage {
         ChainStateInfo state_info = 14;
         DataMessage data_msg = 15;
         DataRequest data_req = 16;
+        LeaveChainMessage leave_chain = 17;
     }
 }
 
@@ -150,4 +151,8 @@ message DataRequest {
 
 message AppendRequest {
     int64 length = 1;
+}
+
+message LeaveChainMessage {
+    bytes chain_mac = 1;
 }

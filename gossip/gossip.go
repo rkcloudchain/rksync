@@ -28,6 +28,9 @@ type Gossip interface {
 	// AddMemberToChain adds member to channel
 	AddMemberToChain(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error)
 
+	// RemoveMemberWithChain removes member contained in the channel
+	RemoveMemberWithChain(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error)
+
 	// AddFileToChain adds file to channel
 	AddFileToChain(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error)
 

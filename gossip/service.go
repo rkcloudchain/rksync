@@ -195,6 +195,15 @@ func (g *gossipService) AddMemberToChain(chainMac common.ChainMac, member common
 	return gc.AddMember(member)
 }
 
+func (g *gossipService) RemoveMemberWithChain(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error) {
+	gc := g.chanState.getChannelByMAC(chainMac)
+	if gc == nil {
+		return nil, errors.Errorf("Channel %s not yet created", chainMac)
+	}
+
+	return gc.RemoveMember(member)
+}
+
 func (g *gossipService) AddFileToChain(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error) {
 	gc := g.chanState.getChannelByMAC(chainMac)
 	if gc == nil {
@@ -417,6 +426,34 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 				gc.HandleMessage(m)
 			}
 		}
+		return
+	}
+
+	if msg.IsLeaveChain() {
+		chainMac := msg.GetLeaveChain().ChainMac
+		gc := g.chanState.getChannelByMAC(chainMac)
+		if gc == nil {
+			logging.Warningf("Failed getting channel %s based on leave message: %+v", chainMac, msg)
+			return
+		}
+
+		chainState := gc.Self()
+		chainInfo, err := chainState.GetChainStateInfo()
+		if err != nil {
+			logging.Errorf("Failed getting channel (%s) state information: %s", chainMac, err)
+			return
+		}
+
+		err = msg.Verify(chainInfo.Leader, func(peerIdentity []byte, signature, message []byte) error {
+			return g.idMapper.Verify(peerIdentity, signature, message)
+		})
+		if err != nil {
+			logging.Errorf("Failed verifying the signature of the leave message: %s", err)
+			return
+		}
+
+		g.chanState.removeChannel(chainMac)
+		m.Ack(nil)
 		return
 	}
 

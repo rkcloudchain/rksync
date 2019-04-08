@@ -12,7 +12,9 @@ import (
 	"encoding/hex"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/discovery"
@@ -163,4 +165,12 @@ func (ga *gossipAdapterImpl) Forward(msg protos.ReceivedMessage) {
 
 func (ga *gossipAdapterImpl) Send(msg *protos.SignedRKSyncMessage, peers ...*common.NetworkMember) {
 	ga.gossipService.srv.Send(msg, peers...)
+}
+
+func (ga *gossipAdapterImpl) SendWithAck(msg *protos.SignedRKSyncMessage, timeout time.Duration, minAck int, peers ...*common.NetworkMember) error {
+	results := ga.gossipService.srv.SendWithAck(msg, timeout, minAck, peers...)
+	if results.AckCount() < minAck {
+		return errors.New(results.String())
+	}
+	return nil
 }

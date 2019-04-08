@@ -175,6 +175,32 @@ func (srv *Server) AddMemberToChan(chainID string, nodeID string, cert *x509.Cer
 	return srv.rewriteChainConfigFile(mac, chainState)
 }
 
+// RemoveMemberWithChan removes member contained in the channel
+func (srv *Server) RemoveMemberWithChan(chainID string, nodeID string, cert *x509.Certificate) error {
+	if chainID == "" {
+		return errors.New("Channel ID must be provided")
+	}
+	if nodeID == "" {
+		return errors.New("Node ID must be provided")
+	}
+	if cert == nil {
+		return errors.New("Node certificate must be provided")
+	}
+
+	pkiID, err := srv.gossip.GetPKIidOfCert(nodeID, cert)
+	if err != nil {
+		return err
+	}
+
+	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
+	chainState, err := srv.gossip.RemoveMemberWithChain(mac, pkiID)
+	if err != nil {
+		return err
+	}
+
+	return srv.rewriteChainConfigFile(mac, chainState)
+}
+
 // AddFileToChan adds a file to the channel
 func (srv *Server) AddFileToChan(chainID string, filepath string, filemode string, metadata []byte) error {
 	if chainID == "" {
