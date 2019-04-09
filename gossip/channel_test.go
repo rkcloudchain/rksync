@@ -58,6 +58,52 @@ func TestChannelInit(t *testing.T) {
 	assert.Equal(t, 2, len(chainStateInfo.Properties.Members))
 }
 
+func TestChannelClose(t *testing.T) {
+	gossipSvc1, err := CreateGossipServer([]string{"localhost:9055"}, "localhost:9055", 0)
+	require.NoError(t, err)
+	defer gossipSvc1.Stop()
+
+	gossipSvc2, err := CreateGossipServer([]string{"localhost:9055"}, "localhost:10055", 1)
+	require.NoError(t, err)
+	defer gossipSvc2.Stop()
+
+	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "closechannel")
+	_, err = gossipSvc1.CreateChain(mac, "closechannel", []common.FileSyncInfo{})
+	assert.NoError(t, err)
+
+	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc2.SelfPKIid())
+	assert.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+	chainInfo := gossipSvc2.SelfChainInfo("closechannel")
+	assert.NotNil(t, chainInfo)
+
+	time.Sleep(5 * time.Second)
+	err = gossipSvc1.CloseChain(mac, true)
+	assert.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+	chainInfo = gossipSvc2.SelfChainInfo("closechannel")
+	assert.Nil(t, chainInfo)
+}
+
+func TestCreateLeaveChainMessage(t *testing.T) {
+	gossipSvc1, err := CreateGossipServer([]string{"localhost:9055"}, "localhost:9055", 0)
+	require.NoError(t, err)
+	defer gossipSvc1.Stop()
+
+	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "channel1")
+	assert.NotNil(t, mac)
+	msg, err := gossipSvc1.CreateLeaveChainMessage(mac)
+	assert.NoError(t, err)
+	assert.NotNil(t, msg)
+	assert.NotNil(t, msg.RKSyncMessage)
+	assert.NotNil(t, msg.Envelope)
+	assert.NotNil(t, msg.Envelope.Payload)
+	assert.NotNil(t, msg.Envelope.Signature)
+	assert.True(t, len(msg.Envelope.Signature) > 0)
+}
+
 func secureDialOpts() []grpc.DialOption {
 	var dialOpts []grpc.DialOption
 	dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(
