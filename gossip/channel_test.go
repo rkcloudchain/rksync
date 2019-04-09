@@ -104,6 +104,59 @@ func TestCreateLeaveChainMessage(t *testing.T) {
 	assert.True(t, len(msg.Envelope.Signature) > 0)
 }
 
+func TestRemoveMemberWithChain(t *testing.T) {
+	gossipSvc1, err := CreateGossipServer([]string{"localhost:9058"}, "localhost:9058", 0)
+	require.NoError(t, err)
+	defer gossipSvc1.Stop()
+
+	gossipSvc2, err := CreateGossipServer([]string{"localhost:9058"}, "localhost:10058", 1)
+	require.NoError(t, err)
+	defer gossipSvc2.Stop()
+
+	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "channel3")
+	_, err = gossipSvc1.CreateChain(mac, "channel3", []common.FileSyncInfo{})
+	assert.NoError(t, err)
+
+	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc2.SelfPKIid())
+	assert.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+	chainState := gossipSvc2.SelfChainInfo("channel3")
+	assert.NotNil(t, chainState)
+
+	gossipSvc3, err := CreateGossipServer([]string{"localhost:9058"}, "localhost:8058", 2)
+	require.NoError(t, err)
+	defer gossipSvc3.Stop()
+
+	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc3.SelfPKIid())
+	assert.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+	chainState = gossipSvc3.SelfChainInfo("channel3")
+	assert.NotNil(t, chainState)
+
+	chainState, err = gossipSvc1.RemoveMemberWithChain(mac, []byte{0})
+	assert.NoError(t, err)
+	chainInfo, err := chainState.GetChainStateInfo()
+	assert.NoError(t, err)
+	assert.Len(t, chainInfo.Properties.Members, 3)
+
+	_, err = gossipSvc2.RemoveMemberWithChain(mac, gossipSvc3.SelfPKIid())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Failed verifying ChainStateInfo message")
+
+	chainState, err = gossipSvc1.RemoveMemberWithChain(mac, gossipSvc3.SelfPKIid())
+	assert.NoError(t, err)
+	chainInfo, err = chainState.GetChainStateInfo()
+	assert.NoError(t, err)
+	assert.Len(t, chainInfo.Properties.Members, 2)
+
+	time.Sleep(5 * time.Second)
+
+	chainState = gossipSvc3.SelfChainInfo("channel3")
+	assert.Nil(t, chainState)
+}
+
 func secureDialOpts() []grpc.DialOption {
 	var dialOpts []grpc.DialOption
 	dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(

@@ -54,3 +54,20 @@ func TestSelecdtPeers(t *testing.T) {
 	assert.Len(t, SelectPeers(3, peers, CombineRoutingFilters(SelectAllPolicy, pa)), 1)
 	assert.Len(t, SelectPeers(3, peers, CombineRoutingFilters(SelectAllPolicy, pb)), 1)
 }
+
+func TestSelectAllPeers(t *testing.T) {
+	a := common.NetworkMember{Endpoint: "a"}
+	b := common.NetworkMember{Endpoint: "b"}
+	c := common.NetworkMember{Endpoint: "c"}
+	d := common.NetworkMember{Endpoint: "d"}
+	e := common.NetworkMember{Endpoint: "e"}
+	f := common.NetworkMember{Endpoint: "f"}
+	g := common.NetworkMember{Endpoint: "g"}
+
+	peers := []common.NetworkMember{a, b, c, d, e, f, g}
+	filter := func(member common.NetworkMember) bool {
+		return member.Endpoint == "a" || member.Endpoint == "b" || member.Endpoint == "c" || member.Endpoint == "d"
+	}
+
+	assert.Len(t, SelectAllPeers(peers, filter), 4)
+}

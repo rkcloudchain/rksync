@@ -213,8 +213,8 @@ func (d *gossipDiscoveryService) GetMembership() []common.NetworkMember {
 }
 
 func (d *gossipDiscoveryService) Stop() {
-	defer logging.Info("Stopped")
-	logging.Info("Stopping")
+	defer logging.Info("Stopped discovery")
+	logging.Info("Stopping discovery")
 
 	d.lock.Lock()
 	defer d.lock.Unlock()

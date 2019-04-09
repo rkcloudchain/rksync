@@ -38,6 +38,8 @@ type channelState struct {
 }
 
 func (cs *channelState) stop() {
+	logging.Info("Stopping channelState")
+	defer logging.Info("Stopped channelState")
 	if cs.isStopping() {
 		return
 	}

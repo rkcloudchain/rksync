@@ -379,8 +379,8 @@ func (s *Server) Stop() {
 	if !atomic.CompareAndSwapInt32(&s.stopping, int32(0), int32(1)) {
 		return
 	}
-	logging.Info("Stopping")
-	defer logging.Info("Stopped")
+	logging.Info("Stopping rpc")
+	defer logging.Info("Stopped rpc")
 	if s.gSrv != nil {
 		s.gSrv.Stop()
 	}
