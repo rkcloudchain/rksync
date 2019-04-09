@@ -167,11 +167,24 @@ func (s *Server) SendWithAck(msg *protos.SignedRKSyncMessage, timeout time.Durat
 		return nil
 	}
 
+	var err error
 	msg.Nonce = util.RandomUInt64()
-	if s.isStopping() {
+	// Replace the envelope in the message to update the NONCE
+	if len(msg.Signature) == 0 {
+		msg, err = msg.NoopSign()
+	} else {
+		_, err = msg.Sign(func(msg []byte) ([]byte, error) {
+			return s.idMapper.Sign(msg)
+		})
+	}
+
+	if s.isStopping() || err != nil {
+		if err == nil {
+			err = errors.New("Server is stopping")
+		}
 		results := []SendResult{}
 		for _, p := range peers {
-			results = append(results, SendResult{error: errors.New("Server is stopping"), NetworkMember: *p})
+			results = append(results, SendResult{error: err, NetworkMember: *p})
 		}
 		return results
 	}
