@@ -218,19 +218,16 @@ func (srv *Server) RemoveMemberWithChan(chainID string, nodeID string, cert *x50
 }
 
 // AddFileToChan adds a file to the channel
-func (srv *Server) AddFileToChan(chainID string, filepath string, filemode string, metadata []byte) error {
+func (srv *Server) AddFileToChan(chainID string, files []*common.FileSyncInfo) error {
 	if chainID == "" {
 		return errors.New("Channel ID must be provided")
 	}
-	if filepath == "" {
-		return errors.New("File path must be provided")
-	}
-	if filemode == "" {
-		return errors.New("File mode must be provided")
+	if len(files) == 0 {
+		return errors.New("files can't be nil or empty")
 	}
 
 	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
-	chainState, err := srv.gossip.AddFileToChain(mac, common.FileSyncInfo{Path: filepath, Mode: filemode, Metadata: metadata})
+	chainState, err := srv.gossip.AddFileToChain(mac, files)
 	if err != nil {
 		return err
 	}
@@ -239,16 +236,16 @@ func (srv *Server) AddFileToChan(chainID string, filepath string, filemode strin
 }
 
 // RemoveFileWithChan removes file contained in the channel
-func (srv *Server) RemoveFileWithChan(chainID string, filename string) error {
+func (srv *Server) RemoveFileWithChan(chainID string, filenames []string) error {
 	if chainID == "" {
 		return errors.New("Channel ID must be provided")
 	}
-	if filename == "" {
-		return errors.New("File name must be provided")
+	if len(filenames) == 0 {
+		return errors.New("files can't be nil or empty")
 	}
 
 	mac := channel.GenerateMAC(srv.gossip.SelfPKIid(), chainID)
-	chainState, err := srv.gossip.RemoveFileWithChain(mac, filename)
+	chainState, err := srv.gossip.RemoveFileWithChain(mac, filenames)
 	if err != nil {
 		return err
 	}

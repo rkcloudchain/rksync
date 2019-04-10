@@ -39,10 +39,10 @@ type Gossip interface {
 	RemoveMemberWithChain(chainMac common.ChainMac, member common.PKIidType) (*protos.ChainState, error)
 
 	// AddFileToChain adds file to channel
-	AddFileToChain(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error)
+	AddFileToChain(chainMac common.ChainMac, files []*common.FileSyncInfo) (*protos.ChainState, error)
 
 	// RemoveFileWithChain removes file contained in the channel
-	RemoveFileWithChain(chainMac common.ChainMac, filename string) (*protos.ChainState, error)
+	RemoveFileWithChain(chainMac common.ChainMac, filenames []string) (*protos.ChainState, error)
 
 	// GetPKIidOfCert returns the PKI-ID of a certificate
 	GetPKIidOfCert(nodeID string, cert *x509.Certificate) (common.PKIidType, error)

@@ -252,11 +252,7 @@ func (gc *gossipChannel) RemoveMember(member common.PKIidType) (*protos.ChainSta
 	return gc.chainStateMsg, nil
 }
 
-func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, error) {
-	if gc.fileState.lookupFSyncProviderByFilename(file.Path) != nil {
-		return nil, errors.Errorf("File %s has already exists ", file.Path)
-	}
-
+func (gc *gossipChannel) AddFile(files []*common.FileSyncInfo) (*protos.ChainState, error) {
 	gc.Lock()
 	defer gc.Unlock()
 
@@ -265,19 +261,25 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 		return nil, err
 	}
 
-	mode, exists := protos.File_Mode_value[file.Mode]
-	if !exists {
-		return nil, errors.Errorf("Unknow file mode: %s", file.Mode)
-	}
+	for _, file := range files {
+		if gc.fileState.lookupFSyncProviderByFilename(file.Path) != nil {
+			logging.Warningf("File %s has already exists", file.Path)
+			continue
+		}
 
-	for _, f := range stateInfo.Properties.Files {
-		if f.Path == file.Path {
-			return gc.chainStateMsg, nil
+		mode, exists := protos.File_Mode_value[file.Mode]
+		if !exists {
+			return nil, errors.Errorf("Unknow file mode: %s", file.Mode)
+		}
+
+		f := &protos.File{Path: file.Path, Mode: protos.File_Mode(mode)}
+		stateInfo.Properties.Files = append(stateInfo.Properties.Files, f)
+
+		err = gc.fileState.createProvider(file.Path, protos.File_Mode(mode), file.Metadata, true)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed creating file sync provider")
 		}
 	}
-
-	f := &protos.File{Path: file.Path, Mode: protos.File_Mode(mode)}
-	stateInfo.Properties.Files = append(stateInfo.Properties.Files, f)
 
 	envp, err := msg.Sign(func(msg []byte) ([]byte, error) {
 		return gc.idMapper.Sign(msg)
@@ -287,12 +289,10 @@ func (gc *gossipChannel) AddFile(file common.FileSyncInfo) (*protos.ChainState, 
 	}
 	gc.chainStateMsg.Envelope = envp
 	gc.chainStateMsg.SeqNum = uint64(time.Now().UnixNano())
-
-	gc.fileState.createProvider(file.Path, protos.File_Mode(mode), file.Metadata, true)
 	return gc.chainStateMsg, nil
 }
 
-func (gc *gossipChannel) RemoveFile(filename string) (*protos.ChainState, error) {
+func (gc *gossipChannel) RemoveFile(filenames []string) (*protos.ChainState, error) {
 	gc.Lock()
 	defer gc.Unlock()
 
@@ -301,19 +301,18 @@ func (gc *gossipChannel) RemoveFile(filename string) (*protos.ChainState, error)
 		return nil, err
 	}
 
-	var found bool
-	n := len(stateInfo.Properties.Files)
-	for i := 0; i < n; i++ {
-		f := stateInfo.Properties.Files[i]
-		if f.Path == filename {
-			stateInfo.Properties.Files = append(stateInfo.Properties.Files[:i], stateInfo.Properties.Files[i+1:]...)
-			found = true
-			break
-		}
-	}
+	for _, filename := range filenames {
+		gc.fileState.closeFSyncProvider(filename)
+		gc.Unregister(fsync.GenerateMAC(gc.chainMac, filename))
 
-	if !found {
-		return gc.chainStateMsg, nil
+		n := len(stateInfo.Properties.Files)
+		for i := 0; i < n; i++ {
+			f := stateInfo.Properties.Files[i]
+			if f.Path == filename {
+				stateInfo.Properties.Files = append(stateInfo.Properties.Files[:i], stateInfo.Properties.Files[i+1:]...)
+				break
+			}
+		}
 	}
 
 	envp, err := msg.Sign(func(msg []byte) ([]byte, error) {
@@ -325,9 +324,6 @@ func (gc *gossipChannel) RemoveFile(filename string) (*protos.ChainState, error)
 
 	gc.chainStateMsg.Envelope = envp
 	gc.chainStateMsg.SeqNum = uint64(time.Now().UnixNano())
-
-	gc.fileState.closeFSyncProvider(filename)
-	gc.Unregister(fsync.GenerateMAC(gc.chainMac, filename))
 
 	return gc.chainStateMsg, nil
 }

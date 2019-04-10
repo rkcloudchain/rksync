@@ -48,11 +48,11 @@ type Channel interface {
 	// RemoveMember removes member contained in the channel
 	RemoveMember(common.PKIidType) (*protos.ChainState, error)
 
-	// AddFile adds file to the channel
-	AddFile(common.FileSyncInfo) (*protos.ChainState, error)
+	// AddFile adds files to the channel
+	AddFile([]*common.FileSyncInfo) (*protos.ChainState, error)
 
 	// RemoveFile removes file contained in the channel
-	RemoveFile(string) (*protos.ChainState, error)
+	RemoveFile([]string) (*protos.ChainState, error)
 
 	// Stop the channel's activity
 	Stop()
