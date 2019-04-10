@@ -247,7 +247,7 @@ func (g *gossipService) CreateChain(chainMac common.ChainMac, chainID string, fi
 	}
 
 	if c := g.chanState.getChannelByMAC(chainMac); c != nil {
-		return nil, errors.Errorf("Channel (%s) already exists", chainID)
+		return nil, ErrChannelExist
 	}
 
 	gc := g.chanState.joinChannel(chainMac, chainID, true)
@@ -261,7 +261,7 @@ func (g *gossipService) CloseChain(chainMac common.ChainMac, notify bool) error 
 
 	gc := g.chanState.getChannelByMAC(chainMac)
 	if gc == nil {
-		return errors.Errorf("Failed to find channel with mac: %s", chainMac)
+		return ErrChannelNotExist
 	}
 	chainState := gc.Self()
 	msg, err := chainState.Envelope.ToRKSyncMessage()

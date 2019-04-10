@@ -9,10 +9,17 @@ package gossip
 import (
 	"crypto/x509"
 
+	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/filter"
 	"github.com/rkcloudchain/rksync/protos"
+)
+
+// Portable analogs of some common channel call errors
+var (
+	ErrChannelExist    = errors.New("channel already exists")
+	ErrChannelNotExist = errors.New("channel does not exist")
 )
 
 type channelRoutingFilterFactory func(channel.Channel) filter.RoutingFilter
