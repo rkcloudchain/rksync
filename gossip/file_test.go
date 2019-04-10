@@ -37,9 +37,9 @@ func TestFileSync(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc2.SelfPKIid())
 	assert.NoError(t, err)
-	_, err = gossipSvc1.AddFileToChain(mac, common.FileSyncInfo{Path: "https-cert.pem", Mode: "Append"})
+	_, err = gossipSvc1.AddFileToChain(mac, []*common.FileSyncInfo{&common.FileSyncInfo{Path: "https-cert.pem", Mode: "Append"}})
 	assert.NoError(t, err)
-	_, err = gossipSvc1.AddFileToChain(mac, common.FileSyncInfo{Path: "https-key.pem", Mode: "Append"})
+	_, err = gossipSvc1.AddFileToChain(mac, []*common.FileSyncInfo{&common.FileSyncInfo{Path: "https-key.pem", Mode: "Append"}})
 	assert.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
@@ -95,7 +95,7 @@ func TestChainStateDynamicUpdate(t *testing.T) {
 	assert.Len(t, state.Properties.Members, 2)
 	assert.Len(t, state.Properties.Files, 3)
 
-	_, err = gossipSvc1.AddFileToChain(mac, common.FileSyncInfo{Path: "https-cert.pem", Mode: "Append"})
+	_, err = gossipSvc1.AddFileToChain(mac, []*common.FileSyncInfo{&common.FileSyncInfo{Path: "https-cert.pem", Mode: "Append"}})
 	assert.NoError(t, err)
 
 	time.Sleep(5 * time.Second)

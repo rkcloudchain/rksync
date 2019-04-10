@@ -70,6 +70,9 @@ type batchedMessage struct {
 }
 
 func (p *batchingEmitterImpl) Add(message interface{}) {
+	if p.toDie() {
+		return
+	}
 	if p.iterations == 0 {
 		return
 	}

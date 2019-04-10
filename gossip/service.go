@@ -204,22 +204,22 @@ func (g *gossipService) RemoveMemberWithChain(chainMac common.ChainMac, member c
 	return gc.RemoveMember(member)
 }
 
-func (g *gossipService) AddFileToChain(chainMac common.ChainMac, file common.FileSyncInfo) (*protos.ChainState, error) {
+func (g *gossipService) AddFileToChain(chainMac common.ChainMac, files []*common.FileSyncInfo) (*protos.ChainState, error) {
 	gc := g.chanState.getChannelByMAC(chainMac)
 	if gc == nil {
 		return nil, errors.Errorf("Channel %s not yet created", chainMac)
 	}
 
-	return gc.AddFile(file)
+	return gc.AddFile(files)
 }
 
-func (g *gossipService) RemoveFileWithChain(chainMac common.ChainMac, filename string) (*protos.ChainState, error) {
+func (g *gossipService) RemoveFileWithChain(chainMac common.ChainMac, filenames []string) (*protos.ChainState, error) {
 	gc := g.chanState.getChannelByMAC(chainMac)
 	if gc == nil {
 		return nil, errors.Errorf("Channel %s not yet created", chainMac)
 	}
 
-	return gc.RemoveFile(filename)
+	return gc.RemoveFile(filenames)
 }
 
 func (g *gossipService) GetPKIidOfCert(nodeID string, cert *x509.Certificate) (common.PKIidType, error) {
@@ -327,8 +327,8 @@ func (g *gossipService) Stop() {
 	logging.Info("Stopping gossip")
 	defer logging.Info("Stopped gossip")
 	g.chanState.stop()
-	g.discAdapter.close()
 	g.disc.Stop()
+	g.discAdapter.close()
 	g.toDieChan <- struct{}{}
 	g.emitter.Stop()
 	g.ChannelDeMultiplexer.Close()
@@ -579,8 +579,6 @@ func (g *gossipService) isInChannel(m protos.ReceivedMessage) bool {
 }
 
 func (g *gossipService) forwardDiscoveryMsg(msg protos.ReceivedMessage) {
-	g.discAdapter.RLock()
-	defer g.discAdapter.RUnlock()
 	if g.discAdapter.toDie() {
 		return
 	}
@@ -717,14 +715,10 @@ type discoveryAdapter struct {
 	gossipFunc       func(message *protos.SignedRKSyncMessage)
 	forwardFunc      func(message protos.ReceivedMessage)
 	disclosurePolicy discovery.DisclosurePolicy
-	sync.RWMutex
 }
 
 func (da *discoveryAdapter) close() {
 	atomic.StoreInt32(&da.stopping, int32(1))
-
-	da.Lock()
-	defer da.Unlock()
 	close(da.incChan)
 }
 
@@ -733,8 +727,6 @@ func (da *discoveryAdapter) toDie() bool {
 }
 
 func (da *discoveryAdapter) Gossip(msg *protos.SignedRKSyncMessage) {
-	da.RLock()
-	defer da.RUnlock()
 	if da.toDie() {
 		return
 	}
@@ -743,8 +735,6 @@ func (da *discoveryAdapter) Gossip(msg *protos.SignedRKSyncMessage) {
 }
 
 func (da *discoveryAdapter) Forward(msg protos.ReceivedMessage) {
-	da.RLock()
-	defer da.RUnlock()
 	if da.toDie() {
 		return
 	}
@@ -753,8 +743,6 @@ func (da *discoveryAdapter) Forward(msg protos.ReceivedMessage) {
 }
 
 func (da *discoveryAdapter) SendToPeer(peer *common.NetworkMember, msg *protos.SignedRKSyncMessage) {
-	da.RLock()
-	defer da.RUnlock()
 	if da.toDie() {
 		return
 	}
