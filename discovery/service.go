@@ -216,9 +216,6 @@ func (d *gossipDiscoveryService) Stop() {
 	defer logging.Info("Stopped discovery")
 	logging.Info("Stopping discovery")
 
-	d.lock.Lock()
-	defer d.lock.Unlock()
-
 	atomic.StoreInt32(&d.toDieFlag, int32(1))
 	d.msgStore.Stop()
 	d.toDieChan <- struct{}{}
