@@ -289,6 +289,11 @@ func (is *identityMapper) setupCSP(conf *config.IdentityConfig) error {
 		return err
 	}
 
+	cert, err = is.sanitizeCert(cert)
+	if err != nil {
+		return err
+	}
+
 	certPubK, err := is.csp.KeyImport(cert, importer.X509CERT, true)
 	if err != nil {
 		return errors.Wrap(err, "Failed to import certificate's public key")
