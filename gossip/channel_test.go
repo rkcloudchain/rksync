@@ -40,7 +40,7 @@ func TestChannelInit(t *testing.T) {
 
 	fmt.Println("Create channel")
 	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "testchannel")
-	_, err = gossipSvc1.CreateChain(mac, "testchannel", []common.FileSyncInfo{})
+	_, err = gossipSvc1.CreateChain(mac, "testchannel", []*common.FileSyncInfo{})
 	assert.NoError(t, err)
 	fmt.Println("Add member to channel")
 	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc2.SelfPKIid())
@@ -68,7 +68,7 @@ func TestChannelClose(t *testing.T) {
 	defer gossipSvc2.Stop()
 
 	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "closechannel")
-	_, err = gossipSvc1.CreateChain(mac, "closechannel", []common.FileSyncInfo{})
+	_, err = gossipSvc1.CreateChain(mac, "closechannel", []*common.FileSyncInfo{})
 	assert.NoError(t, err)
 
 	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc2.SelfPKIid())
@@ -114,7 +114,7 @@ func TestRemoveMemberWithChain(t *testing.T) {
 	defer gossipSvc2.Stop()
 
 	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "channel3")
-	_, err = gossipSvc1.CreateChain(mac, "channel3", []common.FileSyncInfo{})
+	_, err = gossipSvc1.CreateChain(mac, "channel3", []*common.FileSyncInfo{})
 	assert.NoError(t, err)
 
 	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc2.SelfPKIid())

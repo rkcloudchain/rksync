@@ -29,10 +29,10 @@ func TestFileSync(t *testing.T) {
 	defer gossipSvc2.Stop()
 
 	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "testchannel")
-	_, err = gossipSvc1.CreateChain(mac, "testchannel", []common.FileSyncInfo{
-		common.FileSyncInfo{Path: "101.png", Mode: "Append"},
-		common.FileSyncInfo{Path: "config.yaml", Mode: "Append"},
-		common.FileSyncInfo{Path: "rfc2616.txt", Mode: "Append"},
+	_, err = gossipSvc1.CreateChain(mac, "testchannel", []*common.FileSyncInfo{
+		&common.FileSyncInfo{Path: "101.png", Mode: "Append"},
+		&common.FileSyncInfo{Path: "config.yaml", Mode: "Append"},
+		&common.FileSyncInfo{Path: "rfc2616.txt", Mode: "Append"},
 	})
 	assert.NoError(t, err)
 	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc2.SelfPKIid())
@@ -63,10 +63,10 @@ func TestChainStateDynamicUpdate(t *testing.T) {
 	defer gossipSvc1.Stop()
 
 	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "testchain")
-	_, err = gossipSvc1.CreateChain(mac, "testchain", []common.FileSyncInfo{
-		common.FileSyncInfo{Path: "101.png", Mode: "Append"},
-		common.FileSyncInfo{Path: "config.yaml", Mode: "Append"},
-		common.FileSyncInfo{Path: "rfc2616.txt", Mode: "Append"},
+	_, err = gossipSvc1.CreateChain(mac, "testchain", []*common.FileSyncInfo{
+		&common.FileSyncInfo{Path: "101.png", Mode: "Append"},
+		&common.FileSyncInfo{Path: "config.yaml", Mode: "Append"},
+		&common.FileSyncInfo{Path: "rfc2616.txt", Mode: "Append"},
 	})
 	assert.NoError(t, err)
 
@@ -129,10 +129,9 @@ func TestFileMetadata(t *testing.T) {
 	defer gossipSvc1.Stop()
 
 	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "testchain")
-	_, err = gossipSvc1.CreateChain(mac, "testchain", []common.FileSyncInfo{
-		common.FileSyncInfo{Path: "101.png", Mode: "Append", Metadata: createMetadata("101.png", "png")},
-		common.FileSyncInfo{Path: "config.yaml", Mode: "Append", Metadata: createMetadata("config.yaml", "yaml")},
-		common.FileSyncInfo{Path: "rfc2616.txt", Mode: "Append", Metadata: createMetadata("rfc2616.txt", "txt")},
+	_, err = gossipSvc1.CreateChain(mac, "testchain", []*common.FileSyncInfo{
+		&common.FileSyncInfo{Path: "101.png", Mode: "Append", Metadata: createMetadata("101.png", "png")},
+		&common.FileSyncInfo{Path: "config.yaml", Mode: "Append", Metadata: createMetadata("config.yaml", "yaml")},
 	})
 	assert.NoError(t, err)
 
@@ -154,6 +153,51 @@ func TestFileMetadata(t *testing.T) {
 	assert.NoError(t, err)
 
 	state := msg.GetStateInfo()
+	assert.NotNil(t, state)
+	assert.Len(t, state.Properties.Members, 2)
+	assert.Len(t, state.Properties.Files, 2)
+
+	for _, f := range state.Properties.Files {
+		m := metadata{}
+		err := json.Unmarshal(f.Metadata, &m)
+		assert.NoError(t, err)
+		assert.Equal(t, f.Path, m.Name)
+		assert.Equal(t, filepath.Ext(f.Path), fmt.Sprintf(".%s", m.Type))
+	}
+
+	_, err = gossipSvc1.AddFileToChain(mac, []*common.FileSyncInfo{
+		&common.FileSyncInfo{Path: "rfc2616.txt", Mode: "Append", Metadata: createMetadata("rfc2616.txt", "txt")},
+	})
+	assert.NoError(t, err)
+
+	chain = gossipSvc1.SelfChainInfo("testchain")
+	assert.NotNil(t, chain)
+
+	msg, err = chain.Envelope.ToRKSyncMessage()
+	assert.NoError(t, err)
+
+	state = msg.GetStateInfo()
+	assert.NotNil(t, state)
+	assert.Len(t, state.Properties.Members, 2)
+	assert.Len(t, state.Properties.Files, 3)
+
+	for _, f := range state.Properties.Files {
+		m := metadata{}
+		err := json.Unmarshal(f.Metadata, &m)
+		assert.NoError(t, err)
+		assert.Equal(t, f.Path, m.Name)
+		assert.Equal(t, filepath.Ext(f.Path), fmt.Sprintf(".%s", m.Type))
+	}
+
+	time.Sleep(5 * time.Second)
+
+	chain = gossipSvc2.SelfChainInfo("testchain")
+	assert.NotNil(t, chain)
+
+	msg, err = chain.Envelope.ToRKSyncMessage()
+	assert.NoError(t, err)
+
+	state = msg.GetStateInfo()
 	assert.NotNil(t, state)
 	assert.Len(t, state.Properties.Members, 2)
 	assert.Len(t, state.Properties.Files, 3)

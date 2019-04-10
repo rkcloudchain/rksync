@@ -109,7 +109,7 @@ func (gc *gossipChannel) InitializeWithChainState(chainState *protos.ChainState)
 	return nil
 }
 
-func (gc *gossipChannel) Initialize(chainID string, members []common.PKIidType, files []common.FileSyncInfo) (*protos.ChainState, error) {
+func (gc *gossipChannel) Initialize(chainID string, members []common.PKIidType, files []*common.FileSyncInfo) (*protos.ChainState, error) {
 	gc.Lock()
 	defer gc.Unlock()
 
@@ -272,7 +272,7 @@ func (gc *gossipChannel) AddFile(files []*common.FileSyncInfo) (*protos.ChainSta
 			return nil, errors.Errorf("Unknow file mode: %s", file.Mode)
 		}
 
-		f := &protos.File{Path: file.Path, Mode: protos.File_Mode(mode)}
+		f := &protos.File{Path: file.Path, Mode: protos.File_Mode(mode), Metadata: file.Metadata}
 		stateInfo.Properties.Files = append(stateInfo.Properties.Files, f)
 
 		err = gc.fileState.createProvider(file.Path, protos.File_Mode(mode), file.Metadata, true)
@@ -372,6 +372,8 @@ func (gc *gossipChannel) HandleMessage(msg protos.ReceivedMessage) {
 		err = gc.updateChainState(m.GetState(), msg.GetConnectionInfo().ID)
 		if err == nil {
 			gc.Forward(msg)
+		} else {
+			logging.Errorf("Failed updating chain state message: %s", err)
 		}
 	}
 

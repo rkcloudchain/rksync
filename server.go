@@ -127,7 +127,7 @@ func (srv *Server) Stop() {
 }
 
 // CreateChannel creates a channel
-func (srv *Server) CreateChannel(chainID string, files []common.FileSyncInfo) error {
+func (srv *Server) CreateChannel(chainID string, files []*common.FileSyncInfo) error {
 	logging.Debugf("Creating channel, ID: %s", chainID)
 
 	if err := validateChannelID(chainID); err != nil {

@@ -51,7 +51,7 @@ type Gossip interface {
 	InitializeChain(chainMac common.ChainMac, chainState *protos.ChainState) error
 
 	// CreateChain creates a channel
-	CreateChain(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error)
+	CreateChain(chainMac common.ChainMac, chainID string, files []*common.FileSyncInfo) (*protos.ChainState, error)
 
 	// CloseChain closes a channel
 	CloseChain(chainMac common.ChainMac, notify bool) error

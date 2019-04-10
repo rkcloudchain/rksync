@@ -171,9 +171,9 @@ func TestRKSyncServiceServe(t *testing.T) {
 	assert.NoError(t, err)
 	defer srv2.Stop()
 
-	err = srv1.CreateChannel("testchannel", []common.FileSyncInfo{
-		common.FileSyncInfo{Path: "101.png", Mode: "Append"},
-		common.FileSyncInfo{Path: "config.yaml", Mode: "Append"},
+	err = srv1.CreateChannel("testchannel", []*common.FileSyncInfo{
+		&common.FileSyncInfo{Path: "101.png", Mode: "Append"},
+		&common.FileSyncInfo{Path: "config.yaml", Mode: "Append"},
 	})
 	assert.NoError(t, err)
 

@@ -10,6 +10,7 @@ env:
 branches:
   only:
     - master
+    - release-1.0
 
 before_install:
   - go get -t -v ./...

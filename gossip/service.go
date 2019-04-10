@@ -235,7 +235,7 @@ func (g *gossipService) GetPKIidOfCert(nodeID string, cert *x509.Certificate) (c
 	return digest, nil
 }
 
-func (g *gossipService) CreateChain(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error) {
+func (g *gossipService) CreateChain(chainMac common.ChainMac, chainID string, files []*common.FileSyncInfo) (*protos.ChainState, error) {
 	if len(chainMac) == 0 {
 		return nil, errors.New("Channel mac can't be nil or empty")
 	}
@@ -324,8 +324,8 @@ func (g *gossipService) Stop() {
 	}
 
 	atomic.StoreInt32(&g.stopFlag, int32(1))
-	logging.Info("Stopping gossip")
-	defer logging.Info("Stopped gossip")
+	logging.Infof("Stopping gossip instance: %s", g.id)
+	defer logging.Infof("Stopped gossip instance: %s", g.id)
 	g.chanState.stop()
 	g.disc.Stop()
 	g.discAdapter.close()
@@ -719,7 +719,6 @@ type discoveryAdapter struct {
 
 func (da *discoveryAdapter) close() {
 	atomic.StoreInt32(&da.stopping, int32(1))
-	close(da.incChan)
 }
 
 func (da *discoveryAdapter) toDie() bool {
