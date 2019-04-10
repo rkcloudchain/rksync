@@ -37,7 +37,7 @@ type Channel interface {
 	HandleMessage(protos.ReceivedMessage)
 
 	// Initialize allocates the ChainState and should be invoked once per channel per creation
-	Initialize(string, []common.PKIidType, []common.FileSyncInfo) (*protos.ChainState, error)
+	Initialize(string, []common.PKIidType, []*common.FileSyncInfo) (*protos.ChainState, error)
 
 	// InitializeWithChanState allocates the ChainState message
 	InitializeWithChainState(*protos.ChainState) error

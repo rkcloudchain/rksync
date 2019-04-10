@@ -235,7 +235,7 @@ func (g *gossipService) GetPKIidOfCert(nodeID string, cert *x509.Certificate) (c
 	return digest, nil
 }
 
-func (g *gossipService) CreateChain(chainMac common.ChainMac, chainID string, files []common.FileSyncInfo) (*protos.ChainState, error) {
+func (g *gossipService) CreateChain(chainMac common.ChainMac, chainID string, files []*common.FileSyncInfo) (*protos.ChainState, error) {
 	if len(chainMac) == 0 {
 		return nil, errors.New("Channel mac can't be nil or empty")
 	}
