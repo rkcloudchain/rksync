@@ -509,6 +509,7 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 		chainMac := msg.GetLeaveChain().ChainMac
 		gc := g.chanState.getChannelByMAC(chainMac)
 		if gc == nil {
+			m.Ack(errors.Errorf("Failed getting channel %s based on leave message", chainMac))
 			logging.Warningf("Failed getting channel %s based on leave message: %+v", chainMac, msg)
 			return
 		}
@@ -516,6 +517,7 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 		chainState := gc.Self()
 		chainInfo, err := chainState.GetChainStateInfo()
 		if err != nil {
+			m.Ack(errors.Errorf("Failed getting channel (%s) state information", chainMac))
 			logging.Errorf("Failed getting channel (%s) state information: %s", chainMac, err)
 			return
 		}
@@ -524,6 +526,7 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 			return g.idMapper.Verify(peerIdentity, signature, message)
 		})
 		if err != nil {
+			m.Ack(errors.New("Failed verifying the signature of the leave message"))
 			logging.Errorf("Failed verifying the signature of the leave message: %s", err)
 			return
 		}
