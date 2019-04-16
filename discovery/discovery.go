@@ -16,6 +16,7 @@ import (
 type CryptoService interface {
 	ValidateAliveMsg(message *protos.SignedRKSyncMessage) bool
 	SignMessage(m *protos.RKSyncMessage) *protos.Envelope
+	SelfIdentity() common.PeerIdentityType
 }
 
 // RPCService is an interface that the discovery expects to be implemented and passed on creation

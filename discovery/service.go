@@ -329,6 +329,7 @@ func (d *gossipDiscoveryService) aliveMsg() *protos.RKSyncMessage {
 					IncNum: uint64(d.incTime),
 					SeqNum: seq,
 				},
+				Identity: d.crypt.SelfIdentity(),
 			},
 		},
 	}
@@ -482,6 +483,10 @@ func (d *gossipDiscoveryService) handleMsgFromRPC(msg protos.ReceivedMessage) {
 			msg, err := envp.ToRKSyncMessage()
 			if err != nil {
 				logging.Warningf("Failed deserializing RKSyncMessage from envelope: %+v", errors.WithStack(err))
+				continue
+			}
+			if !d.crypt.ValidateAliveMsg(msg) {
+				logging.Warningf("Failed validating alive message: %+v", msg)
 				continue
 			}
 			if !d.msgStore.Add(msg) {

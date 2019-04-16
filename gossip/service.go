@@ -811,6 +811,10 @@ func (sa *discoverySecurityAdapter) SignMessage(m *protos.RKSyncMessage) *protos
 	return e
 }
 
+func (sa *discoverySecurityAdapter) SelfIdentity() common.PeerIdentityType {
+	return sa.identity
+}
+
 func (sa *discoverySecurityAdapter) validateAliveMsgSignature(m *protos.SignedRKSyncMessage, id common.PKIidType) bool {
 	am := m.GetAliveMsg()
 	verifier := func(pkiID []byte, signature, message []byte) error {

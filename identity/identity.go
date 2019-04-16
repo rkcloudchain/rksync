@@ -33,7 +33,7 @@ import (
 // Identity holds identities of peer
 type Identity interface {
 	Put(pkiID common.PKIidType, identity common.PeerIdentityType) error
-	Get(pkiID common.PKIidType) (*x509.Certificate, error)
+	Get(pkiID common.PKIidType) (common.PeerIdentityType, error)
 	Sign(msg []byte) ([]byte, error)
 	Verify(vkID common.PKIidType, signature, message []byte) error
 	GetPKIidOfCert(common.PeerIdentityType) common.PKIidType
@@ -134,11 +134,11 @@ func (is *identityMapper) Put(pkiID common.PKIidType, identity common.PeerIdenti
 		})
 	}
 
-	is.certs[pkiID.String()] = newStoredIdentity(pkiID, cert, expirationTimer)
+	is.certs[pkiID.String()] = newStoredIdentity(pkiID, identity, expirationTimer)
 	return nil
 }
 
-func (is *identityMapper) Get(pkiID common.PKIidType) (*x509.Certificate, error) {
+func (is *identityMapper) Get(pkiID common.PKIidType) (common.PeerIdentityType, error) {
 	is.RLock()
 	defer is.RUnlock()
 
@@ -163,7 +163,18 @@ func (is *identityMapper) Sign(msg []byte) ([]byte, error) {
 }
 
 func (is *identityMapper) Verify(vkID common.PKIidType, signature, message []byte) error {
-	cert, err := is.Get(vkID)
+	identity, err := is.Get(vkID)
+	if err != nil {
+		return err
+	}
+
+	var sid protos.SerializedIdentity
+	err = proto.Unmarshal(identity, &sid)
+	if err != nil {
+		return err
+	}
+
+	cert, err := util.GetX509CertificateFromPEM(sid.IdBytes)
 	if err != nil {
 		return err
 	}
@@ -367,11 +378,11 @@ func (is *identityMapper) getUniqueValidationChain(cert *x509.Certificate) ([]*x
 
 type storedIdentity struct {
 	pkiID           common.PKIidType
-	identity        *x509.Certificate
+	identity        common.PeerIdentityType
 	expirationTimer *time.Timer
 }
 
-func newStoredIdentity(pkiID common.PKIidType, identity *x509.Certificate, expirationTimer *time.Timer) *storedIdentity {
+func newStoredIdentity(pkiID common.PKIidType, identity common.PeerIdentityType, expirationTimer *time.Timer) *storedIdentity {
 	return &storedIdentity{
 		pkiID:           pkiID,
 		identity:        identity,

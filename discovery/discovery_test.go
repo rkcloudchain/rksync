@@ -101,24 +101,6 @@ func TestLookup(t *testing.T) {
 	assert.Equal(t, rpc1.GetPKIid(), member.PKIID)
 }
 
-func TestSelf(t *testing.T) {
-	disc, rpc, err := CreateDiscoveryInstance("localhost:11111", 0)
-	require.NoError(t, err)
-	defer disc.Stop()
-
-	srv, ok := disc.(*gossipDiscoveryService)
-	assert.True(t, ok)
-
-	time.Sleep(5 * time.Second)
-
-	srv.lock.RLock()
-	self := srv.self
-	srv.lock.RUnlock()
-
-	assert.Equal(t, "localhost:11111", self.Endpoint)
-	assert.Equal(t, rpc.GetPKIid(), self.PKIID)
-}
-
 type mockRPCService struct {
 	rpc        *rpc.Server
 	membership func() []common.NetworkMember
@@ -161,6 +143,7 @@ func (m *mockRPCService) Forward(msg protos.ReceivedMessage) {
 
 type mockCryptoService struct {
 	idMapper identity.Identity
+	identity common.PeerIdentityType
 }
 
 func (m *mockCryptoService) SignMessage(message *protos.RKSyncMessage) *protos.Envelope {
@@ -213,6 +196,10 @@ func (m *mockCryptoService) ValidateAliveMsg(message *protos.SignedRKSyncMessage
 	return true
 }
 
+func (m *mockCryptoService) SelfIdentity() common.PeerIdentityType {
+	return m.identity
+}
+
 // CreateRPCServerWithIdentity creates rpc server
 func CreateRPCServerWithIdentity(address string, selfIdentity common.PeerIdentityType, idMapper identity.Identity) (*rpc.Server, error) {
 	srv, err := server.NewGRPCServer(address, &config.ServerConfig{
@@ -258,7 +245,7 @@ func CreateDiscoveryInstance(address string, num int) (Discovery, *rpc.Server, e
 	}
 
 	mockRPC := &mockRPCService{rpc: rpc}
-	disc := NewDiscoveryService(common.NetworkMember{Endpoint: address, PKIID: rpc.GetPKIid()}, mockRPC, &mockCryptoService{idMapper})
+	disc := NewDiscoveryService(common.NetworkMember{Endpoint: address, PKIID: rpc.GetPKIid()}, mockRPC, &mockCryptoService{idMapper, selfIdentity})
 	mockRPC.membership = disc.GetMembership
 
 	return disc, rpc, nil
