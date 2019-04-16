@@ -101,6 +101,80 @@ func TestLookup(t *testing.T) {
 	assert.Equal(t, rpc1.GetPKIid(), member.PKIID)
 }
 
+func TestMembership(t *testing.T) {
+	disc1, rpc1, err := CreateDiscoveryInstance("localhost:4053", 0)
+	require.NoError(t, err)
+	defer disc1.Stop()
+	defer rpc1.Stop()
+
+	disc2, rpc2, err := CreateDiscoveryInstance("localhost:4054", 1)
+	require.NoError(t, err)
+	defer disc2.Stop()
+	defer rpc2.Stop()
+
+	disc3, rpc3, err := CreateDiscoveryInstance("localhost:4055", 2)
+	require.NoError(t, err)
+	defer disc3.Stop()
+	defer rpc3.Stop()
+
+	disc4, rpc4, err := CreateDiscoveryInstance("localhost:4056", 3)
+	require.NoError(t, err)
+	defer disc4.Stop()
+	defer rpc4.Stop()
+
+	disc5, rpc5, err := CreateDiscoveryInstance("localhost:4057", 4)
+	require.NoError(t, err)
+	defer disc5.Stop()
+	defer rpc5.Stop()
+
+	disc6, rpc6, err := CreateDiscoveryInstance("localhost:4058", 5)
+	require.NoError(t, err)
+	defer disc6.Stop()
+	defer rpc6.Stop()
+
+	disc7, rpc7, err := CreateDiscoveryInstance("localhost:4059", 6)
+	require.NoError(t, err)
+	defer disc7.Stop()
+	defer rpc7.Stop()
+
+	disc8, rpc8, err := CreateDiscoveryInstance("localhost:4060", 7)
+	require.NoError(t, err)
+	defer disc8.Stop()
+	defer rpc8.Stop()
+
+	disc9, rpc9, err := CreateDiscoveryInstance("localhost:4061", 8)
+	require.NoError(t, err)
+	defer disc9.Stop()
+	defer rpc9.Stop()
+
+	disc10, rpc10, err := CreateDiscoveryInstance("localhost:4062", 9)
+	require.NoError(t, err)
+	defer disc10.Stop()
+	defer rpc10.Stop()
+
+	go disc2.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
+	go disc3.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
+	go disc4.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
+	go disc5.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
+	go disc6.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
+	go disc7.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
+	go disc8.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
+	go disc9.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
+	go disc10.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
+
+	time.Sleep(15 * time.Second)
+	assert.Len(t, disc1.GetMembership(), 9)
+	assert.Len(t, disc2.GetMembership(), 9)
+	assert.Len(t, disc3.GetMembership(), 9)
+	assert.Len(t, disc4.GetMembership(), 9)
+	assert.Len(t, disc5.GetMembership(), 9)
+	assert.Len(t, disc6.GetMembership(), 9)
+	assert.Len(t, disc7.GetMembership(), 9)
+	assert.Len(t, disc8.GetMembership(), 9)
+	assert.Len(t, disc9.GetMembership(), 9)
+	assert.Len(t, disc10.GetMembership(), 9)
+}
+
 type mockRPCService struct {
 	rpc        *rpc.Server
 	membership func() []common.NetworkMember
@@ -219,7 +293,7 @@ func CreateRPCServerWithIdentity(address string, selfIdentity common.PeerIdentit
 
 // CreateDiscoveryInstance creates discovery instance
 func CreateDiscoveryInstance(address string, num int) (Discovery, *rpc.Server, error) {
-	home, err := filepath.Abs(fmt.Sprintf("../tests/fixtures/identity/peer%d", num))
+	home, err := filepath.Abs(fmt.Sprintf("../tests/fixtures/identity/peer%d", num%3))
 	if err != nil {
 		return nil, nil, err
 	}
