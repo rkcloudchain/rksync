@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -194,6 +195,84 @@ func TestProbe(t *testing.T) {
 	_, err = inst1.Handshake(&common.NetworkMember{Endpoint: "localhost:10053", PKIID: inst2.GetPKIid()})
 	assert.NoError(t, err)
 	assert.Error(t, inst1.Probe(&common.NetworkMember{Endpoint: "localhost:11053", PKIID: []byte("localhost:11053")}))
+}
+
+func TestConcurrentCloseSend(t *testing.T) {
+	var stopping int32
+
+	inst1, err := CreateRPCServer("localhost:5053", 0)
+	require.NoError(t, err)
+	defer inst1.Stop()
+
+	inst2, err := CreateRPCServer("localhost:5054", 1)
+	require.NoError(t, err)
+
+	m := inst2.Accept(func(msg interface{}) bool { return true })
+	inst1.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:5054", PKIID: inst2.GetPKIid()})
+	<-m
+
+	ready := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		inst1.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:5054", PKIID: inst2.GetPKIid()})
+		close(ready)
+
+		for atomic.LoadInt32(&stopping) == int32(0) {
+			inst1.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:5054", PKIID: inst2.GetPKIid()})
+		}
+	}()
+
+	<-ready
+	inst2.Stop()
+	atomic.StoreInt32(&stopping, int32(1))
+	<-done
+}
+
+func TestBasic(t *testing.T) {
+	inst1, err := CreateRPCServer("localhost:6053", 0)
+	require.NoError(t, err)
+	defer inst1.Stop()
+
+	inst2, err := CreateRPCServer("localhost:6054", 1)
+	require.NoError(t, err)
+	defer inst2.Stop()
+
+	m1 := inst1.Accept(func(msg interface{}) bool { return true })
+	m2 := inst2.Accept(func(msg interface{}) bool { return true })
+
+	out := make(chan uint64, 2)
+	reader := func(ch <-chan protos.ReceivedMessage) {
+		m := <-ch
+		out <- m.GetRKSyncMessage().Nonce
+	}
+
+	go reader(m1)
+	go reader(m2)
+
+	inst1.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:6054", PKIID: inst2.GetPKIid()})
+	time.Sleep(time.Second)
+	inst2.Send(createRKSyncMessage(), &common.NetworkMember{Endpoint: "localhost:6053", PKIID: inst1.GetPKIid()})
+	waitForMessage(t, out, 2, "Didn't receive messages")
+}
+
+func waitForMessage(t *testing.T, msgChan <-chan uint64, count int, errMsg string) {
+	c := 0
+	waiting := true
+	ticker := time.NewTicker(time.Duration(10) * time.Second)
+	for waiting {
+		select {
+		case <-msgChan:
+			c++
+			if c == count {
+				waiting = false
+			}
+		case <-ticker.C:
+			waiting = false
+		}
+	}
+	assert.Equal(t, count, c, errMsg)
 }
 
 func createRKSyncMessage() *protos.SignedRKSyncMessage {

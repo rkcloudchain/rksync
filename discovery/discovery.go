@@ -18,20 +18,6 @@ type CryptoService interface {
 	SignMessage(m *protos.RKSyncMessage) *protos.Envelope
 }
 
-// EnvelopeFilter may or may not remove part of the Envelope
-// that the given SignedRKSyncMessage originates from.
-type EnvelopeFilter func(message *protos.SignedRKSyncMessage) *protos.Envelope
-
-// Sieve defines the messages that are allowed to be sent to some remote peer.
-// based on some criteria.
-// Returns whether the sieve permits sending a given message
-type Sieve func(message *protos.SignedRKSyncMessage) bool
-
-// DisclosurePolicy defines which  messages a given remote peer
-// is eligible of knowing about, and also what is it eligible
-// to know about out of a given SignedRKSyncMessage
-type DisclosurePolicy func(remotePeer *common.NetworkMember) (Sieve, EnvelopeFilter)
-
 // RPCService is an interface that the discovery expects to be implemented and passed on creation
 type RPCService interface {
 	Gossip(msg *protos.SignedRKSyncMessage)

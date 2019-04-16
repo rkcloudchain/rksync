@@ -82,7 +82,7 @@ message Acknowledgement {
 
 message MembershipRequest {
     Envelope self_information = 1;
-    repeated bytes known = 2;
+    repeated Envelope known = 2;
 }
 
 message MembershipResponse {

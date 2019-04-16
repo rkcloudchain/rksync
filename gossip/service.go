@@ -16,7 +16,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/channel"
 	"github.com/rkcloudchain/rksync/common"
@@ -68,7 +67,7 @@ func NewGossipService(gConf *config.GossipConfig, idConf *config.IdentityConfig,
 		gConf.MaxPropagationBurstLatency, g.sendGossipBatch)
 
 	g.discAdapter = g.newDiscoveryAdapter()
-	g.disc = discovery.NewDiscoveryService(g.selfNetworkMember(), g.discAdapter, g.newDiscoverySecurityAdapter(), g.disclosurePolicy)
+	g.disc = discovery.NewDiscoveryService(g.selfNetworkMember(), g.discAdapter, g.newDiscoverySecurityAdapter())
 	logging.Infof("Creating gossip service with self membership of %s", g.selfNetworkMember())
 
 	g.stopSignal.Add(2)
@@ -689,35 +688,19 @@ func (g *gossipService) newDiscoveryAdapter() *discoveryAdapter {
 				filter:              msg.GetConnectionInfo().ID.IsNotSameFilter,
 			})
 		},
-		incChan:          make(chan protos.ReceivedMessage),
-		presumedDead:     g.presumedDead,
-		disclosurePolicy: g.disclosurePolicy,
+		incChan:      make(chan protos.ReceivedMessage),
+		presumedDead: g.presumedDead,
 	}
-}
-
-func (g *gossipService) disclosurePolicy(remotePeer *common.NetworkMember) (discovery.Sieve, discovery.EnvelopeFilter) {
-	return func(msg *protos.SignedRKSyncMessage) bool {
-			if !msg.IsAliveMsg() {
-				logging.Fatal("Programing error, this should be used only on alive message")
-			}
-
-			return msg.GetAliveMsg().Membership.Endpoint != "" && remotePeer.Endpoint != ""
-
-		}, func(msg *protos.SignedRKSyncMessage) *protos.Envelope {
-			envelope := proto.Clone(msg.Envelope).(*protos.Envelope)
-			return envelope
-		}
 }
 
 // discoveryAdapter is used to supply the discovery module with needed abilities
 type discoveryAdapter struct {
-	stopping         int32
-	srv              *rpc.Server
-	presumedDead     chan common.PKIidType
-	incChan          chan protos.ReceivedMessage
-	gossipFunc       func(message *protos.SignedRKSyncMessage)
-	forwardFunc      func(message protos.ReceivedMessage)
-	disclosurePolicy discovery.DisclosurePolicy
+	stopping     int32
+	srv          *rpc.Server
+	presumedDead chan common.PKIidType
+	incChan      chan protos.ReceivedMessage
+	gossipFunc   func(message *protos.SignedRKSyncMessage)
+	forwardFunc  func(message protos.ReceivedMessage)
 }
 
 func (da *discoveryAdapter) close() {
@@ -749,34 +732,6 @@ func (da *discoveryAdapter) SendToPeer(peer *common.NetworkMember, msg *protos.S
 		return
 	}
 
-	if memReq := msg.GetMemReq(); memReq != nil && len(peer.PKIID) != 0 {
-		selfMsg, err := memReq.SelfInformation.ToRKSyncMessage()
-		if err != nil {
-			panic(errors.Wrap(err, "Tried to send a membership request with a malformed AliveMessage"))
-		}
-
-		_, omitConcealedFields := da.disclosurePolicy(peer)
-		selfMsg.Envelope = omitConcealedFields(selfMsg)
-		oldKnown := memReq.Known
-		memReq = &protos.MembershipRequest{
-			SelfInformation: selfMsg.Envelope,
-			Known:           oldKnown,
-		}
-		msgCopy := proto.Clone(msg.RKSyncMessage).(*protos.RKSyncMessage)
-
-		msgCopy.Content = &protos.RKSyncMessage_MemReq{
-			MemReq: memReq,
-		}
-		msg, err := (&protos.SignedRKSyncMessage{
-			RKSyncMessage: msgCopy,
-		}).NoopSign()
-
-		if err != nil {
-			return
-		}
-		da.srv.Send(msg, peer)
-		return
-	}
 	da.srv.Send(msg, peer)
 }
 

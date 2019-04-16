@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/rkcloudchain/rksync/common"
 	"github.com/rkcloudchain/rksync/lib"
@@ -39,7 +40,7 @@ func (ts *timestamp) String() string {
 }
 
 // NewDiscoveryService returns a new discovery service
-func NewDiscoveryService(self common.NetworkMember, rpc RPCService, crypt CryptoService, disPol DisclosurePolicy) Discovery {
+func NewDiscoveryService(self common.NetworkMember, rpc RPCService, crypt CryptoService) Discovery {
 	d := &gossipDiscoveryService{
 		self:                         self,
 		incTime:                      uint64(time.Now().UnixNano()),
@@ -53,7 +54,6 @@ func NewDiscoveryService(self common.NetworkMember, rpc RPCService, crypt Crypto
 		rpc:                          rpc,
 		toDieChan:                    make(chan struct{}, 1),
 		toDieFlag:                    int32(0),
-		disclosurePolicy:             disPol,
 		pubsub:                       lib.NewPubSub(),
 		aliveTimeInterval:            defaultHelloInterval,
 		aliveExpirationTimeout:       5 * defaultHelloInterval,
@@ -89,7 +89,6 @@ type gossipDiscoveryService struct {
 	msgStore                     *aliveMsgStore
 	toDieChan                    chan struct{}
 	toDieFlag                    int32
-	disclosurePolicy             DisclosurePolicy
 	reconnectInterval            time.Duration
 	aliveTimeInterval            time.Duration
 	aliveExpirationTimeout       time.Duration
@@ -233,49 +232,60 @@ func (d *gossipDiscoveryService) sendUntilAcked(peer *common.NetworkMember, mess
 	}
 }
 
-func (d *gossipDiscoveryService) createMembershipResponse(aliveMsg *protos.SignedRKSyncMessage, target *common.NetworkMember) *protos.MembershipResponse {
-	shouldBeDisclosed, omitConcealedFields := d.disclosurePolicy(target)
-	if !shouldBeDisclosed(aliveMsg) {
-		return nil
-	}
-
+func (d *gossipDiscoveryService) createMembershipResponse(aliveMsg *protos.SignedRKSyncMessage) *protos.MembershipResponse {
 	d.lock.RLock()
 	defer d.lock.RUnlock()
 
 	deadPeers := []*protos.Envelope{}
-
 	for _, dm := range d.deadMembership.ToSlice() {
-		if !shouldBeDisclosed(dm) {
-			continue
-		}
-		deadPeers = append(deadPeers, omitConcealedFields(dm))
+		envp := proto.Clone(dm.Envelope).(*protos.Envelope)
+		deadPeers = append(deadPeers, envp)
 	}
 
 	aliveSnapshot := []*protos.Envelope{}
 	for _, am := range d.aliveMembership.ToSlice() {
-		if !shouldBeDisclosed(am) {
-			continue
-		}
-		aliveSnapshot = append(aliveSnapshot, omitConcealedFields(am))
+		envp := proto.Clone(am.Envelope).(*protos.Envelope)
+		aliveSnapshot = append(aliveSnapshot, envp)
 	}
 
+	e := proto.Clone(aliveMsg.Envelope).(*protos.Envelope)
 	return &protos.MembershipResponse{
-		Alive: append(aliveSnapshot, omitConcealedFields(aliveMsg)),
+		Alive: append(aliveSnapshot, e),
 		Dead:  deadPeers,
 	}
 }
 
 func (d *gossipDiscoveryService) createMembershipRequest() (*protos.RKSyncMessage, error) {
-	am, err := d.createSignedAliveMessage()
-	if err != nil {
-		return nil, errors.WithStack(err)
+	var am *protos.SignedRKSyncMessage
+	var err error
+
+	d.lock.RLock()
+	am = d.selfAliveMessage
+	d.lock.RUnlock()
+
+	if am == nil {
+		am, err = d.createSignedAliveMessage()
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
 	}
 
-	req := &protos.MembershipRequest{
-		SelfInformation: am.Envelope,
-		// TODO: sending the known peers
-		Known: [][]byte{},
+	e := proto.Clone(am.Envelope).(*protos.Envelope)
+	req := &protos.MembershipRequest{SelfInformation: e}
+
+	d.lock.RLock()
+	defer d.lock.RUnlock()
+
+	aliveSnapshot := []*protos.Envelope{}
+	for _, am := range d.aliveMembership.ToSlice() {
+		if !am.IsAliveMsg() {
+			logging.Fatal("createMembershipRequest: Programming error, am should be alive messages")
+		}
+
+		envp := proto.Clone(am.Envelope).(*protos.Envelope)
+		aliveSnapshot = append(aliveSnapshot, envp)
 	}
+	req.Known = aliveSnapshot
 
 	return &protos.RKSyncMessage{
 		Tag:   protos.RKSyncMessage_EMPTY,
@@ -355,7 +365,7 @@ func (d *gossipDiscoveryService) getDeadMembers() []common.PKIidType {
 func (d *gossipDiscoveryService) periodicalSendAlive() {
 	defer logging.Debug("Stopped")
 
-	for !d.toDie() {
+	for {
 		select {
 		case <-time.After(d.aliveTimeInterval):
 			msg, err := d.createSignedAliveMessage()
@@ -377,7 +387,7 @@ func (d *gossipDiscoveryService) periodicalSendAlive() {
 func (d *gossipDiscoveryService) periodicalCheckAlive() {
 	defer logging.Debug("Stopped")
 
-	for !d.toDie() {
+	for {
 		select {
 		case <-time.After(d.aliveExpirationCheckInterval):
 			dead := d.getDeadMembers()
@@ -429,7 +439,7 @@ func (d *gossipDiscoveryService) handleMessage() {
 	defer logging.Debug("Stopped")
 
 	in := d.rpc.Accept()
-	for !d.toDie() {
+	for {
 		select {
 		case s := <-d.toDieChan:
 			d.toDieChan <- s
@@ -465,6 +475,23 @@ func (d *gossipDiscoveryService) handleMsgFromRPC(msg protos.ReceivedMessage) {
 		}
 		if d.msgStore.CheckValid(selfInRKSyncMsg) {
 			d.handleAliveMessage(selfInRKSyncMsg)
+		}
+
+		aliveMsgs := []*protos.SignedRKSyncMessage{selfInRKSyncMsg}
+		for _, envp := range memReq.Known {
+			msg, err := envp.ToRKSyncMessage()
+			if err != nil {
+				logging.Warningf("Failed deserializing RKSyncMessage from envelope: %+v", errors.WithStack(err))
+				continue
+			}
+			if !d.msgStore.Add(msg) {
+				continue
+			}
+			aliveMsgs = append(aliveMsgs, msg)
+		}
+
+		for _, aliveMsg := range aliveMsgs {
+			d.handleAliveMessage(aliveMsg)
 		}
 
 		go d.sendMemResponse(selfInRKSyncMsg.GetAliveMsg().Membership, m.Nonce)
@@ -588,6 +615,12 @@ func (d *gossipDiscoveryService) sendMemResponse(target *protos.Member, nonce ui
 		PKIID:    target.PkiId,
 	}
 
+	if targetPeer.Endpoint == "" {
+		logging.Warningf("Discovery: Target endpoint is empty, this should be a programming error")
+		d.rpc.CloseConn(targetPeer)
+		return
+	}
+
 	var aliveMsg *protos.SignedRKSyncMessage
 	var err error
 	d.lock.RLock()
@@ -602,13 +635,7 @@ func (d *gossipDiscoveryService) sendMemResponse(target *protos.Member, nonce ui
 		}
 	}
 
-	memResp := d.createMembershipResponse(aliveMsg, targetPeer)
-	if memResp == nil {
-		logging.Warningf("Got a membership request from a peer that shouldn't have sent one: %v, closing connection to the peer as a result", target)
-		d.rpc.CloseConn(targetPeer)
-		return
-	}
-
+	memResp := d.createMembershipResponse(aliveMsg)
 	defer logging.Debug("Exiting, replying with", memResp)
 
 	msg, err := (&protos.RKSyncMessage{
@@ -764,7 +791,7 @@ func (d *gossipDiscoveryService) isSentByMe(m *protos.SignedRKSyncMessage) bool 
 func (d *gossipDiscoveryService) periodicalReconnectToDead() {
 	defer logging.Debug("Stopped")
 
-	for !d.toDie() {
+	for {
 		select {
 		case <-time.After(d.reconnectInterval):
 			wg := sync.WaitGroup{}
@@ -816,7 +843,7 @@ func (d *gossipDiscoveryService) copyLastSeen(lastSeenMap map[string]*timestamp)
 func (d *gossipDiscoveryService) handlePresumedDeadPeers() {
 	defer logging.Debug("Stopped")
 
-	for !d.toDie() {
+	for {
 		select {
 		case deadPeer := <-d.rpc.PresumedDead():
 			if d.isAlive(deadPeer) {
