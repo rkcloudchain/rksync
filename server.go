@@ -346,12 +346,7 @@ func serializeIdentity(cfg *config.IdentityConfig, homedir string) (common.PeerI
 		return nil, errors.Wrap(err, "Failed to make identity file absolute")
 	}
 
-	certPEM, err := ioutil.ReadFile(cfg.GetCertificate())
-	if err != nil {
-		return nil, err
-	}
-
-	cert, err := util.GetX509CertificateFromPEM(certPEM)
+	cert, err := util.GetX509CertificateFromPEM(cfg.GetCertificate())
 	if err != nil {
 		return nil, err
 	}
