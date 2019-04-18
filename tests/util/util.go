@@ -9,7 +9,6 @@ package util
 import (
 	"encoding/pem"
 	"errors"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,12 +40,7 @@ func DefaultGossipConfig(bootstrap []string, endpoint string) *config.GossipConf
 
 // GetIdentity gets peer identity
 func GetIdentity(cfg *config.IdentityConfig) (common.PeerIdentityType, error) {
-	certBytes, err := ioutil.ReadFile(cfg.GetCertificate())
-	if err != nil {
-		return nil, err
-	}
-
-	cert, err := util.GetX509CertificateFromPEM(certBytes)
+	cert, err := util.GetX509CertificateFromPEM(cfg.GetCertificate())
 	if err != nil {
 		return nil, err
 	}

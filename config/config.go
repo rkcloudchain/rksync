@@ -9,6 +9,7 @@ package config
 
 import (
 	"crypto/tls"
+	"encoding/pem"
 	"io"
 	"io/ioutil"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/rkcloudchain/rksync/logging"
 	"github.com/rkcloudchain/rksync/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
@@ -74,15 +76,15 @@ type GossipConfig struct {
 type IdentityConfig struct {
 	ID string // ID of this instance
 
-	keyStoreDir         string
-	certFile            string
-	rootCAFiles         []string
-	intermediateCAFiles []string
+	keyStoreDir     string
+	cert            []byte
+	rootCAs         [][]byte
+	intermediateCAs [][]byte
 }
 
 // GetCertificate returns the certificate file associated with the configuration
-func (c *IdentityConfig) GetCertificate() string {
-	return c.certFile
+func (c *IdentityConfig) GetCertificate() []byte {
+	return c.cert
 }
 
 // GetKeyStoreDir returns the key store directory
@@ -90,14 +92,14 @@ func (c *IdentityConfig) GetKeyStoreDir() string {
 	return c.keyStoreDir
 }
 
-// GetRootCACerts returns the root ca certificate files associated with the configuration
-func (c *IdentityConfig) GetRootCACerts() []string {
-	return c.rootCAFiles
+// GetRootCAs returns the root ca certificates associated with the configuration
+func (c *IdentityConfig) GetRootCAs() [][]byte {
+	return c.rootCAs
 }
 
-// GetIntermediateCACerts returns the intermediate ca certificate files associated with the configuration
-func (c *IdentityConfig) GetIntermediateCACerts() []string {
-	return c.intermediateCAFiles
+// GetIntermediateCAs returns the intermediate ca certificates associated with the configuration
+func (c *IdentityConfig) GetIntermediateCAs() [][]byte {
+	return c.intermediateCAs
 }
 
 // MakeFilesAbs makes files absolute relative to 'HomeDir' if not already absolute
@@ -108,28 +110,32 @@ func (c *IdentityConfig) MakeFilesAbs(homedir string) error {
 
 	c.keyStoreDir = filepath.Join(homedir, "csp", "keystore")
 
-	err := c.setupCertificate(homedir)
+	err := c.setupRootCAs(homedir)
 	if err != nil {
 		return err
 	}
 
-	err = c.setupRootCAs(homedir)
+	err = c.setupIntermediateCAs(homedir)
 	if err != nil {
 		return err
 	}
 
-	return c.setupIntermediateCAs(homedir)
+	return c.setupCertificate(homedir)
 }
 
 func (c *IdentityConfig) setupCertificate(homedir string) error {
 	var err error
-	c.certFile, err = util.MakeFileAbs("csp/signcerts/cert.pem", homedir)
+	certDir, err := util.MakeFileAbs("csp/signcerts", homedir)
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(c.certFile); err != nil {
-		return err
+
+	signcert, err := getPemMaterialFromDir(certDir)
+	if err != nil || len(signcert) == 0 {
+		return errors.WithMessagef(err, "could not load a valid signer certificate from directory %s", certDir)
 	}
+
+	c.cert = signcert[0]
 	return nil
 }
 
@@ -138,35 +144,13 @@ func (c *IdentityConfig) setupRootCAs(homedir string) error {
 	if err != nil {
 		return err
 	}
-	fi, err := os.Stat(rootCACertsDir)
-	if err != nil {
-		return err
-	}
-	if !fi.IsDir() {
-		return errors.Errorf("%s: is not a directory", rootCACertsDir)
+
+	cacerts, err := getPemMaterialFromDir(rootCACertsDir)
+	if err != nil || len(cacerts) == 0 {
+		return errors.WithMessagef(err, "could not load a valid ca certificate from directory %s", rootCACertsDir)
 	}
 
-	files, err := ioutil.ReadDir(rootCACertsDir)
-	if err != nil {
-		return err
-	}
-
-	c.rootCAFiles = make([]string, 0)
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		if filepath.Ext(file.Name()) != ".pem" {
-			continue
-		}
-
-		cafile, err := util.MakeFileAbs(file.Name(), rootCACertsDir)
-		if err != nil {
-			return err
-		}
-		c.rootCAFiles = append(c.rootCAFiles, cafile)
-	}
-
+	c.rootCAs = cacerts
 	return nil
 }
 
@@ -176,39 +160,64 @@ func (c *IdentityConfig) setupIntermediateCAs(homedir string) error {
 		return err
 	}
 
-	fi, err := os.Stat(caCertsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	if !fi.IsDir() {
-		return errors.Errorf("%s: is not a directory", caCertsDir)
+	intermediatecerts, err := getPemMaterialFromDir(caCertsDir)
+	if os.IsNotExist(err) {
+		logging.Debugf("Intermediate certs folder not found at [%s]. Skipping. [%s]", caCertsDir, err)
+	} else if err != nil {
+		return errors.WithMessagef(err, "failed loading intermediate ca certs at [%s]", caCertsDir)
 	}
 
-	files, err := ioutil.ReadDir(caCertsDir)
-	if err != nil {
-		return err
-	}
-
-	c.intermediateCAFiles = make([]string, 0)
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		if filepath.Ext(file.Name()) != ".pem" {
-			continue
-		}
-
-		cafile, err := util.MakeFileAbs(file.Name(), caCertsDir)
-		if err != nil {
-			return err
-		}
-		c.intermediateCAFiles = append(c.intermediateCAFiles, cafile)
-	}
-
+	c.intermediateCAs = intermediatecerts
 	return nil
+}
+
+func getPemMaterialFromDir(dir string) ([][]byte, error) {
+	_, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return nil, err
+	}
+
+	content := make([][]byte, 0)
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not read directory %s", dir)
+	}
+
+	for _, f := range files {
+		fullName := filepath.Join(dir, f.Name())
+		f, err := os.Stat(fullName)
+		if err != nil {
+			logging.Warningf("Failed to stat %s: %s", fullName, err)
+			continue
+		}
+		if f.IsDir() {
+			continue
+		}
+
+		item, err := readPemFile(fullName)
+		if err != nil {
+			logging.Warningf("Failed reading file %s: %s", fullName, err)
+			continue
+		}
+
+		content = append(content, item)
+	}
+
+	return content, nil
+}
+
+func readPemFile(file string) ([]byte, error) {
+	fileData, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not read file %s", file)
+	}
+
+	b, _ := pem.Decode(fileData)
+	if b == nil {
+		return nil, errors.Errorf("No pem data for file %s", file)
+	}
+
+	return fileData, nil
 }
 
 // ServerConfig defines the parameters for configuring a GRPCServer instance

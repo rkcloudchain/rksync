@@ -13,7 +13,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/hex"
-	"io/ioutil"
 	"sync"
 	"time"
 
@@ -226,34 +225,22 @@ func (is *identityMapper) GetPKIidOfCert(peerIdentity common.PeerIdentityType) c
 }
 
 func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
-	rootCAFiles := conf.GetRootCACerts()
-	if len(rootCAFiles) == 0 {
-		return errors.New("expected at least one CA certificate")
-	}
+	cacerts := conf.GetRootCAs()
+	intermediatecerts := conf.GetIntermediateCAs()
 
 	is.opts = &x509.VerifyOptions{Roots: x509.NewCertPool(), Intermediates: x509.NewCertPool()}
-	rootCAs := make([]*x509.Certificate, len(rootCAFiles))
-	intermediateCAs := make([]*x509.Certificate, len(conf.GetIntermediateCACerts()))
-	for i, v := range rootCAFiles {
-		certPEM, err := ioutil.ReadFile(v)
-		if err != nil {
-			return err
-		}
-
-		cert, err := util.GetX509CertificateFromPEM(certPEM)
+	rootCAs := make([]*x509.Certificate, len(cacerts))
+	intermediateCAs := make([]*x509.Certificate, len(intermediatecerts))
+	for i, v := range cacerts {
+		cert, err := util.GetX509CertificateFromPEM(v)
 		if err != nil {
 			return err
 		}
 		rootCAs[i] = cert
 		is.opts.Roots.AddCert(cert)
 	}
-	for i, v := range conf.GetIntermediateCACerts() {
-		certPEM, err := ioutil.ReadFile(v)
-		if err != nil {
-			return err
-		}
-
-		cert, err := util.GetX509CertificateFromPEM(certPEM)
+	for i, v := range intermediatecerts {
+		cert, err := util.GetX509CertificateFromPEM(v)
 		if err != nil {
 			return err
 		}
@@ -261,7 +248,7 @@ func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
 		is.opts.Intermediates.AddCert(cert)
 	}
 
-	is.rootCerts = make([]*x509.Certificate, len(rootCAFiles))
+	is.rootCerts = make([]*x509.Certificate, len(cacerts))
 	for i, trustedCert := range rootCAs {
 		cert, err := is.sanitizeCert(trustedCert)
 		if err != nil {
@@ -269,7 +256,7 @@ func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
 		}
 		is.rootCerts[i] = cert
 	}
-	is.intermediateCerts = make([]*x509.Certificate, len(conf.GetIntermediateCACerts()))
+	is.intermediateCerts = make([]*x509.Certificate, len(intermediatecerts))
 	for i, trustedCert := range intermediateCAs {
 		cert, err := is.sanitizeCert(trustedCert)
 		if err != nil {
@@ -290,12 +277,7 @@ func (is *identityMapper) setupCAs(conf *config.IdentityConfig) error {
 }
 
 func (is *identityMapper) setupCSP(conf *config.IdentityConfig) error {
-	certPEM, err := ioutil.ReadFile(conf.GetCertificate())
-	if err != nil {
-		return err
-	}
-
-	cert, err := util.GetX509CertificateFromPEM(certPEM)
+	cert, err := util.GetX509CertificateFromPEM(conf.GetCertificate())
 	if err != nil {
 		return err
 	}
@@ -348,8 +330,10 @@ func (is *identityMapper) sanitizeCert(cert *x509.Certificate) (*x509.Certificat
 
 		if cert.IsCA && len(chain) == 1 {
 			parentCert = cert
-		} else {
+		} else if len(chain) > 1 {
 			parentCert = chain[1]
+		} else {
+			return nil, errors.New("Invalid x.509 certificate")
 		}
 
 		cert, err = sanitizeECDSASignedCert(cert, parentCert)
