@@ -182,6 +182,10 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 		return nil, err
 	}
 
+	if bytes.Equal(member, gc.pkiID) {
+		return nil, errors.New("Can't add leader to the channel members")
+	}
+
 	for _, m := range stateInfo.Properties.Members {
 		if bytes.Equal(member, common.PKIidType(m)) {
 			return gc.chainStateMsg, nil

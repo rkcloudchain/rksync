@@ -498,6 +498,7 @@ func (g *gossipService) handleMessage(m protos.ReceivedMessage) {
 			}
 
 			if gc != nil {
+				gc.InitializeWithChainState(chainState)
 				gc.HandleMessage(m)
 			}
 		}
