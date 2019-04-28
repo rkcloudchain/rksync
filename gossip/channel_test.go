@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func TestAddLeaderToChainMembers(t *testing.T) {
+func TestAddSelfToChainMembers(t *testing.T) {
 	gossipSvc1, err := CreateGossipServer([]string{"localhost:12053"}, "localhost:12053", 0)
 	require.NoError(t, err)
 	defer gossipSvc1.Stop()

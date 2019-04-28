@@ -174,6 +174,11 @@ func (gc *gossipChannel) Initialize(chainID string, members []common.PKIidType, 
 }
 
 func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState, error) {
+	// can't add self to the members
+	if bytes.Equal(member, gc.pkiID) {
+		return nil, errors.New("Can't add leader to the channel members")
+	}
+
 	gc.Lock()
 	defer gc.Unlock()
 
@@ -182,11 +187,7 @@ func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState,
 		return nil, err
 	}
 
-	if bytes.Equal(member, gc.pkiID) {
-		return nil, errors.New("Can't add leader to the channel members")
-	}
-
-	for _, m := range stateInfo.Properties.Members {
+	for _, m := range gc.members {
 		if bytes.Equal(member, common.PKIidType(m)) {
 			return gc.chainStateMsg, nil
 		}
@@ -635,7 +636,10 @@ func (gc *gossipChannel) requestStateInfo() {
 		return
 	}
 
-	endpoints := filter.SelectPeers(gc.GetChannelConfig().PullPeerNum, gc.GetMembership(), gc.IsMemberInChan)
+	filters := filter.CombineRoutingFilters(gc.IsMemberInChan, func(member common.NetworkMember) bool {
+		return gc.pkiID.IsNotSameFilter(member.PKIID)
+	})
+	endpoints := filter.SelectPeers(gc.GetChannelConfig().PullPeerNum, gc.GetMembership(), filters)
 	gc.Send(req, endpoints...)
 }
 
