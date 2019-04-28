@@ -23,6 +23,20 @@ import (
 	"google.golang.org/grpc"
 )
 
+func TestAddSelfToChainMembers(t *testing.T) {
+	gossipSvc1, err := CreateGossipServer([]string{"localhost:12053"}, "localhost:12053", 0)
+	require.NoError(t, err)
+	defer gossipSvc1.Stop()
+
+	mac := channel.GenerateMAC(gossipSvc1.SelfPKIid(), "testchannel")
+	_, err = gossipSvc1.CreateChain(mac, "testchannel", []*common.FileSyncInfo{})
+	assert.NoError(t, err)
+
+	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc1.SelfPKIid())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Can't add leader to the channel members")
+}
+
 func TestChannelInit(t *testing.T) {
 	gossipSvc1, err := CreateGossipServer([]string{"localhost:9053"}, "localhost:9053", 0)
 	require.NoError(t, err)
