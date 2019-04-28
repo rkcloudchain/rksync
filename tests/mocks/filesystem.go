@@ -24,8 +24,8 @@ type FileSystemMock struct {
 }
 
 // Create ...
-func (m *FileSystemMock) Create(chainID, filename string, metadata []byte, leader bool) (config.File, error) {
-	p := filepath.Join(m.baseDir, filename)
+func (m *FileSystemMock) Create(chainID string, fmeta config.FileMeta) (config.File, error) {
+	p := filepath.Join(m.baseDir, fmeta.Name)
 	dir := filepath.Dir(p)
 	_, err := os.Stat(dir)
 	if err != nil {
@@ -47,13 +47,13 @@ func (m *FileSystemMock) Create(chainID, filename string, metadata []byte, leade
 }
 
 // OpenFile ...
-func (m *FileSystemMock) OpenFile(chainID, filename string, metadata []byte, flag int, perm os.FileMode, leader bool) (config.File, error) {
-	p := filepath.Join(m.baseDir, filename)
+func (m *FileSystemMock) OpenFile(chainID string, fmeta config.FileMeta, flag int, perm os.FileMode) (config.File, error) {
+	p := filepath.Join(m.baseDir, fmeta.Name)
 	return os.OpenFile(p, flag, perm)
 }
 
 // Stat ...
-func (m *FileSystemMock) Stat(chainID, filename string, metadata []byte, leader bool) (os.FileInfo, error) {
-	p := filepath.Join(m.baseDir, filename)
+func (m *FileSystemMock) Stat(chainID string, fmeta config.FileMeta) (os.FileInfo, error) {
+	p := filepath.Join(m.baseDir, fmeta.Name)
 	return os.Stat(p)
 }
