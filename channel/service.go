@@ -176,7 +176,7 @@ func (gc *gossipChannel) Initialize(chainID string, members []common.PKIidType, 
 func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState, error) {
 	// can't add self to the members
 	if bytes.Equal(member, gc.pkiID) {
-		return nil, errors.New("Can't add leader to the channel members")
+		return nil, errors.New("Can't add self-node to the channel members")
 	}
 
 	gc.Lock()
