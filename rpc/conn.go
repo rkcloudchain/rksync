@@ -189,6 +189,7 @@ type connection struct {
 	serverStream protos.RKSync_SyncStreamServer
 	stopFlat     int32
 	stopChan     chan struct{}
+	stopWG       sync.WaitGroup
 	sync.Mutex
 }
 
@@ -208,6 +209,7 @@ func (conn *connection) close() {
 	defer conn.Unlock()
 
 	if conn.clientStream != nil {
+		conn.stopWG.Wait()
 		conn.clientStream.CloseSend()
 	}
 	if conn.conn != nil {
@@ -250,7 +252,9 @@ func (conn *connection) serviceConnection() error {
 	quit := make(chan struct{})
 
 	go conn.readFromStream(errChan, quit, msgChan)
-	go conn.writeToStream()
+
+	conn.stopWG.Add(1)
+	go conn.writeToStream(quit)
 
 	for !conn.toDie() {
 		select {
@@ -268,7 +272,8 @@ func (conn *connection) serviceConnection() error {
 	return nil
 }
 
-func (conn *connection) writeToStream() {
+func (conn *connection) writeToStream(quit chan struct{}) {
+	defer conn.stopWG.Done()
 	for !conn.toDie() {
 		stream := conn.getStream()
 		if stream == nil {
@@ -284,9 +289,8 @@ func (conn *connection) writeToStream() {
 				go m.onErr(err)
 				return
 			}
-		case stop := <-conn.stopChan:
+		case <-quit:
 			logging.Debug("Closing writing to stream")
-			conn.stopChan <- stop
 			return
 		}
 	}
@@ -327,6 +331,7 @@ func (conn *connection) readFromStream(errChan chan error, quit chan struct{}, m
 		select {
 		case msgChan <- msg:
 		case <-quit:
+			logging.Debug("Closing reading stream")
 			return
 		}
 	}
