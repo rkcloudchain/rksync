@@ -136,10 +136,8 @@ func (cs *connectionStore) shutdown() {
 
 		wg.Add(1)
 		go func(conn *connection) {
-			logging.Info("Closing connection: %s", conn.info.ID)
 			cs.closeByPKIid(conn.info.ID)
 			wg.Done()
-			logging.Info("Closed connection: %s", conn.info.ID)
 		}(conn)
 	}
 	wg.Wait()
