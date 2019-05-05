@@ -105,7 +105,6 @@ type FileSyncProvier struct {
 	reqChan  <-chan *protos.RKSyncMessage
 	done     sync.WaitGroup
 	stopCh   chan struct{}
-	once     sync.Once
 }
 
 func (p *FileSyncProvier) initPayloadBufferStart() (int64, error) {
@@ -131,10 +130,11 @@ func (p *FileSyncProvier) initPayloadBufferStart() (int64, error) {
 
 // Stop stops the FileSyncProvider
 func (p *FileSyncProvier) Stop() {
-	p.once.Do(func() {
-		p.stopCh <- struct{}{}
-		p.done.Wait()
-	})
+	logging.Info("Stopping fsync provider")
+	defer logging.Info("Stopped fsync provider")
+
+	p.stopCh <- struct{}{}
+	p.done.Wait()
 }
 
 func (p *FileSyncProvier) listen() {

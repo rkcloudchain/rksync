@@ -119,22 +119,27 @@ func (cs *connectionStore) closeConn(peer *common.NetworkMember) {
 }
 
 func (cs *connectionStore) shutdown() {
+	logging.Info("Closing rpc connection store")
+	defer logging.Info("Closed rpc connection store")
+
 	cs.Lock()
 	cs.isClosing = true
-	conns := cs.conns
 
 	var connections2Close []*connection
-	for _, conn := range conns {
+	for _, conn := range cs.conns {
 		connections2Close = append(connections2Close, conn)
 	}
 	cs.Unlock()
 
 	wg := sync.WaitGroup{}
 	for _, conn := range connections2Close {
+
 		wg.Add(1)
 		go func(conn *connection) {
+			logging.Info("Closing connection: %s", conn.info.ID)
 			cs.closeByPKIid(conn.info.ID)
 			wg.Done()
+			logging.Info("Closed connection: %s", conn.info.ID)
 		}(conn)
 	}
 	wg.Wait()
@@ -249,19 +254,17 @@ func (conn *connection) send(msg *protos.SignedRKSyncMessage, onErr func(error),
 func (conn *connection) serviceConnection() error {
 	errChan := make(chan error, 1)
 	msgChan := make(chan *protos.SignedRKSyncMessage, defRecvBuffSize)
-	quit := make(chan struct{})
 
-	go conn.readFromStream(errChan, quit, msgChan)
+	go conn.readFromStream(errChan, msgChan)
 
 	conn.stopWG.Add(1)
-	go conn.writeToStream(quit)
+	go conn.writeToStream()
 
 	for !conn.toDie() {
 		select {
 		case stop := <-conn.stopChan:
 			logging.Debug("Closing reading from stream")
 			conn.stopChan <- stop
-			close(quit)
 			return nil
 		case err := <-errChan:
 			return err
@@ -272,7 +275,7 @@ func (conn *connection) serviceConnection() error {
 	return nil
 }
 
-func (conn *connection) writeToStream(quit chan struct{}) {
+func (conn *connection) writeToStream() {
 	defer conn.stopWG.Done()
 	for !conn.toDie() {
 		stream := conn.getStream()
@@ -289,8 +292,9 @@ func (conn *connection) writeToStream(quit chan struct{}) {
 				go m.onErr(err)
 				return
 			}
-		case <-quit:
+		case s := <-conn.stopChan:
 			logging.Debug("Closing writing to stream")
+			conn.stopChan <- s
 			return
 		}
 	}
@@ -302,7 +306,7 @@ func (conn *connection) drainOutputBuffer() {
 	}
 }
 
-func (conn *connection) readFromStream(errChan chan error, quit chan struct{}, msgChan chan *protos.SignedRKSyncMessage) {
+func (conn *connection) readFromStream(errChan chan error, msgChan chan *protos.SignedRKSyncMessage) {
 	for !conn.toDie() {
 		stream := conn.getStream()
 		if stream == nil {
@@ -328,12 +332,8 @@ func (conn *connection) readFromStream(errChan chan error, quit chan struct{}, m
 			logging.Debugf("Go error, aborting: %v", err)
 			return
 		}
-		select {
-		case msgChan <- msg:
-		case <-quit:
-			logging.Debug("Closing reading stream")
-			return
-		}
+
+		msgChan <- msg
 	}
 }
 

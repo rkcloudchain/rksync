@@ -101,8 +101,6 @@ func Serve(l net.Listener, cfg *config.Config) (*Server, error) {
 	go func() {
 		if err := grpcServer.Start(); err != nil {
 			logging.Errorf("grpc server exited with error: %s", err)
-		} else {
-			logging.Info("RKSycn server exited")
 		}
 	}()
 
@@ -123,6 +121,7 @@ type Server struct {
 func (srv *Server) Stop() {
 	if srv.gossip != nil {
 		srv.gossip.Stop()
+		logging.Infof("RKSync %s server exited", srv.cfg.Identity.ID)
 	}
 }
 

@@ -10,3 +10,6 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+tests/testdata/peer1
+tests/testdata/peer2
