@@ -99,7 +99,7 @@ func (gc *gossipChannel) InitializeWithChainState(chainState *protos.ChainState)
 	}
 
 	for _, file := range stateInfo.Properties.Files {
-		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, true)
+		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, gc.leader)
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func (gc *gossipChannel) Initialize(chainID string, members []common.PKIidType, 
 	gc.chainStateMsg = chainState
 
 	for _, file := range stateInfo.Properties.Files {
-		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, true)
+		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, gc.leader)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed creating file sync provider")
 		}
@@ -282,7 +282,7 @@ func (gc *gossipChannel) AddFile(files []*common.FileSyncInfo) (*protos.ChainSta
 		f := &protos.File{Path: file.Path, Mode: protos.File_Mode(mode), Metadata: file.Metadata}
 		stateInfo.Properties.Files = append(stateInfo.Properties.Files, f)
 
-		err = gc.fileState.createProvider(file.Path, protos.File_Mode(mode), file.Metadata, true)
+		err = gc.fileState.createProvider(file.Path, protos.File_Mode(mode), file.Metadata, gc.leader)
 		if err != nil {
 			break
 		}
@@ -522,7 +522,7 @@ func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.
 		}
 	}
 	for _, file := range csi.Properties.Files {
-		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, false)
+		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, gc.leader)
 		if err != nil {
 			return errors.Wrapf(err, "Failed creating file sync provider for %s", file.Path)
 		}

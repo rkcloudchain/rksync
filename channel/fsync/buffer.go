@@ -95,9 +95,7 @@ func (b *payloadBufferImpl) Reset(delta int64) {
 	defer b.mutex.Unlock()
 
 	atomic.AddInt64(&b.next, delta)
-	for key := range b.buf {
-		delete(b.buf, key)
-	}
+	b.buf = make(map[int64]*protos.Payload)
 	b.drainReadChannel()
 }
 
