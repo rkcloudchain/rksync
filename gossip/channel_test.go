@@ -34,7 +34,7 @@ func TestAddSelfToChainMembers(t *testing.T) {
 
 	_, err = gossipSvc1.AddMemberToChain(mac, gossipSvc1.SelfPKIid())
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Can't add leader to the channel members")
+	assert.Contains(t, err.Error(), "Can't add self-node to the channel members")
 }
 
 func TestChannelInit(t *testing.T) {

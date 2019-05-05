@@ -26,21 +26,19 @@ import (
 type gossipChannel struct {
 	Adapter
 	sync.RWMutex
-	incTime                   uint64
-	seqNum                    uint64
-	chainID                   string
-	fs                        config.FileSystem
-	pkiID                     common.PKIidType
-	leader                    bool
-	msgStore                  lib.MessageStore
-	chainStateMsg             *protos.ChainState
-	idMapper                  identity.Identity
-	chainMac                  common.ChainMac
-	members                   map[string]common.PKIidType
-	fileState                 *fsyncState
-	stateInfoPublishScheduler *time.Ticker
-	stateInfoRequestScheduler *time.Ticker
-	stopChan                  chan struct{}
+	incTime       uint64
+	seqNum        uint64
+	chainID       string
+	fs            config.FileSystem
+	pkiID         common.PKIidType
+	leader        bool
+	msgStore      lib.MessageStore
+	chainStateMsg *protos.ChainState
+	idMapper      identity.Identity
+	chainMac      common.ChainMac
+	members       map[string]common.PKIidType
+	fileState     *fsyncState
+	stopChan      chan struct{}
 }
 
 // NewGossipChannel creates a new gossip Channel
@@ -69,11 +67,9 @@ func NewGossipChannel(pkiID common.PKIidType, chainMac common.ChainMac, chainID 
 		lib.Noop)
 
 	if gc.leader {
-		gc.stateInfoPublishScheduler = time.NewTicker(adapter.GetChannelConfig().PublishStateInfoInterval)
-		go gc.periodicalInvocation(gc.publishStateInfo, gc.stateInfoPublishScheduler.C)
+		go gc.periodicalPublishStateInfo(adapter.GetChannelConfig().PublishStateInfoInterval)
 	} else {
-		gc.stateInfoRequestScheduler = time.NewTicker(adapter.GetChannelConfig().RequestStateInfoInterval)
-		go gc.periodicalInvocation(gc.requestStateInfo, gc.stateInfoRequestScheduler.C)
+		go gc.periodicalRequestStateInfo(adapter.GetChannelConfig().RequestStateInfoInterval)
 	}
 
 	return gc
@@ -99,7 +95,7 @@ func (gc *gossipChannel) InitializeWithChainState(chainState *protos.ChainState)
 	}
 
 	for _, file := range stateInfo.Properties.Files {
-		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, true)
+		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, gc.leader)
 		if err != nil {
 			return err
 		}
@@ -164,7 +160,7 @@ func (gc *gossipChannel) Initialize(chainID string, members []common.PKIidType, 
 	gc.chainStateMsg = chainState
 
 	for _, file := range stateInfo.Properties.Files {
-		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, true)
+		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, gc.leader)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed creating file sync provider")
 		}
@@ -176,7 +172,7 @@ func (gc *gossipChannel) Initialize(chainID string, members []common.PKIidType, 
 func (gc *gossipChannel) AddMember(member common.PKIidType) (*protos.ChainState, error) {
 	// can't add self to the members
 	if bytes.Equal(member, gc.pkiID) {
-		return nil, errors.New("Can't add leader to the channel members")
+		return nil, errors.New("Can't add self-node to the channel members")
 	}
 
 	gc.Lock()
@@ -282,7 +278,7 @@ func (gc *gossipChannel) AddFile(files []*common.FileSyncInfo) (*protos.ChainSta
 		f := &protos.File{Path: file.Path, Mode: protos.File_Mode(mode), Metadata: file.Metadata}
 		stateInfo.Properties.Files = append(stateInfo.Properties.Files, f)
 
-		err = gc.fileState.createProvider(file.Path, protos.File_Mode(mode), file.Metadata, true)
+		err = gc.fileState.createProvider(file.Path, protos.File_Mode(mode), file.Metadata, gc.leader)
 		if err != nil {
 			break
 		}
@@ -441,12 +437,6 @@ func (gc *gossipChannel) Stop() {
 	gc.stopChan <- struct{}{}
 	gc.msgStore.Stop()
 	gc.fileState.stop()
-	if gc.stateInfoPublishScheduler != nil {
-		gc.stateInfoPublishScheduler.Stop()
-	}
-	if gc.stateInfoRequestScheduler != nil {
-		gc.stateInfoRequestScheduler.Stop()
-	}
 }
 
 func (gc *gossipChannel) handleChainStateResponse(m *protos.RKSyncMessage, sender common.PKIidType) {
@@ -522,7 +512,7 @@ func (gc *gossipChannel) updateChainState(msg *protos.ChainState, sender common.
 		}
 	}
 	for _, file := range csi.Properties.Files {
-		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, false)
+		err := gc.fileState.createProvider(file.Path, file.Mode, file.Metadata, gc.leader)
 		if err != nil {
 			return errors.Wrapf(err, "Failed creating file sync provider for %s", file.Path)
 		}
@@ -589,13 +579,13 @@ func (gc *gossipChannel) verifyMsg(msg protos.ReceivedMessage) bool {
 	return true
 }
 
-func (gc *gossipChannel) periodicalInvocation(fn func(), c <-chan time.Time) {
+func (gc *gossipChannel) periodicalPublishStateInfo(dur time.Duration) {
 	for {
 		select {
-		case <-c:
-			fn()
-		case <-gc.stopChan:
-			gc.stopChan <- struct{}{}
+		case <-time.After(dur):
+			gc.publishStateInfo()
+		case s := <-gc.stopChan:
+			gc.stopChan <- s
 			return
 		}
 	}
@@ -627,6 +617,18 @@ func (gc *gossipChannel) publishStateInfo() {
 	}
 
 	gc.Gossip(msg)
+}
+
+func (gc *gossipChannel) periodicalRequestStateInfo(dur time.Duration) {
+	for {
+		select {
+		case <-time.After(dur):
+			gc.requestStateInfo()
+		case s := <-gc.stopChan:
+			gc.stopChan <- s
+			return
+		}
+	}
 }
 
 func (gc *gossipChannel) requestStateInfo() {

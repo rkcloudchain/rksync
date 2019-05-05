@@ -105,19 +105,18 @@ type FileSyncProvier struct {
 	reqChan  <-chan *protos.RKSyncMessage
 	done     sync.WaitGroup
 	stopCh   chan struct{}
-	once     sync.Once
 }
 
 func (p *FileSyncProvier) initPayloadBufferStart() (int64, error) {
 	fs := p.GetFileSystem()
-	fi, err := fs.Stat(p.chainID, p.filename, p.metadata, p.leader)
+	fi, err := fs.Stat(p.chainID, config.FileMeta{Name: p.filename, Metadata: p.metadata, Leader: p.leader})
 	if err == nil {
 		return fi.Size(), nil
 	}
 
 	if !p.leader && os.IsNotExist(err) {
 		logging.Debugf("Channel %s file %s does not exists, create it", p.chainMac, p.filename)
-		f, err := fs.Create(p.chainID, p.filename, p.metadata, p.leader)
+		f, err := fs.Create(p.chainID, config.FileMeta{Name: p.filename, Metadata: p.metadata, Leader: p.leader})
 		if err != nil {
 			logging.Errorf("Failed creating file %s (Channel %s): %s", p.filename, p.chainMac, err)
 			return 0, err
@@ -131,10 +130,11 @@ func (p *FileSyncProvier) initPayloadBufferStart() (int64, error) {
 
 // Stop stops the FileSyncProvider
 func (p *FileSyncProvier) Stop() {
-	p.once.Do(func() {
-		p.stopCh <- struct{}{}
-		p.done.Wait()
-	})
+	logging.Info("Stopping fsync provider")
+	defer logging.Info("Stopped fsync provider")
+
+	p.stopCh <- struct{}{}
+	p.done.Wait()
 }
 
 func (p *FileSyncProvier) listen() {
@@ -194,7 +194,7 @@ func (p *FileSyncProvier) processPayloads() {
 
 	logging.Debugf("[%s] Ready to process payloads, next payload start number is = [%d]", p.filename, p.payloads.Next())
 	fs := p.GetFileSystem()
-	f, err := fs.OpenFile(p.chainID, p.filename, p.metadata, os.O_WRONLY|os.O_APPEND, os.ModePerm, p.leader)
+	f, err := fs.OpenFile(p.chainID, config.FileMeta{Name: p.filename, Metadata: p.metadata, Leader: p.leader}, os.O_WRONLY|os.O_APPEND, os.ModePerm)
 	if err != nil {
 		logging.Errorf("Failed opening file %s (Channel %): %s", p.filename, p.chainMac, err)
 		return
@@ -272,7 +272,7 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 		}
 
 		appendReq := req.GetAppend()
-		fi, err := p.GetFileSystem().Stat(p.chainID, p.filename, p.metadata, p.leader)
+		fi, err := p.GetFileSystem().Stat(p.chainID, config.FileMeta{Name: p.filename, Metadata: p.metadata, Leader: p.leader})
 		if err != nil {
 			logging.Warningf("Failed to stat file %s: %s", p.filename, err)
 			return
@@ -288,7 +288,7 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 		var n int
 
 		fs := p.GetFileSystem()
-		f, err := fs.OpenFile(p.chainID, p.filename, p.metadata, os.O_RDONLY, os.ModePerm, p.leader)
+		f, err := fs.OpenFile(p.chainID, config.FileMeta{Name: p.filename, Metadata: p.metadata, Leader: p.leader}, os.O_RDONLY, os.ModePerm)
 		if err != nil {
 			logging.Errorf("Failed opening file %s (Channel %s): %s", p.filename, p.chainMac, err)
 			return
@@ -376,7 +376,7 @@ func (p *FileSyncProvier) requestDataAppend() {
 }
 
 func (p *FileSyncProvier) createDataAppendMsgRequest() (*protos.SignedRKSyncMessage, error) {
-	fi, err := p.GetFileSystem().Stat(p.chainID, p.filename, p.metadata, p.leader)
+	fi, err := p.GetFileSystem().Stat(p.chainID, config.FileMeta{Name: p.filename, Metadata: p.metadata, Leader: p.leader})
 	if err != nil {
 		logging.Warningf("Failed to stat file %s: %s", p.filename, err)
 		return nil, err

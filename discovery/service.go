@@ -366,7 +366,7 @@ func (d *gossipDiscoveryService) getDeadMembers() []common.PKIidType {
 func (d *gossipDiscoveryService) periodicalSendAlive() {
 	defer logging.Debug("Stopped")
 
-	for {
+	for !d.toDie() {
 		select {
 		case <-time.After(d.aliveTimeInterval):
 			msg, err := d.createSignedAliveMessage()
@@ -388,7 +388,7 @@ func (d *gossipDiscoveryService) periodicalSendAlive() {
 func (d *gossipDiscoveryService) periodicalCheckAlive() {
 	defer logging.Debug("Stopped")
 
-	for {
+	for !d.toDie() {
 		select {
 		case <-time.After(d.aliveExpirationCheckInterval):
 			dead := d.getDeadMembers()
@@ -440,7 +440,7 @@ func (d *gossipDiscoveryService) handleMessage() {
 	defer logging.Debug("Stopped")
 
 	in := d.rpc.Accept()
-	for {
+	for !d.toDie() {
 		select {
 		case s := <-d.toDieChan:
 			d.toDieChan <- s
@@ -796,7 +796,7 @@ func (d *gossipDiscoveryService) isSentByMe(m *protos.SignedRKSyncMessage) bool 
 func (d *gossipDiscoveryService) periodicalReconnectToDead() {
 	defer logging.Debug("Stopped")
 
-	for {
+	for !d.toDie() {
 		select {
 		case <-time.After(d.reconnectInterval):
 			wg := sync.WaitGroup{}
@@ -848,7 +848,7 @@ func (d *gossipDiscoveryService) copyLastSeen(lastSeenMap map[string]*timestamp)
 func (d *gossipDiscoveryService) handlePresumedDeadPeers() {
 	defer logging.Debug("Stopped")
 
-	for {
+	for !d.toDie() {
 		select {
 		case deadPeer := <-d.rpc.PresumedDead():
 			if d.isAlive(deadPeer) {
