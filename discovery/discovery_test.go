@@ -162,7 +162,7 @@ func TestMembership(t *testing.T) {
 	go disc9.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
 	go disc10.Connect(common.NetworkMember{Endpoint: "localhost:4053"}, func() (common.PKIidType, error) { return rpc1.GetPKIid(), nil })
 
-	time.Sleep(15 * time.Second)
+	time.Sleep(20 * time.Second)
 	assert.Len(t, disc1.GetMembership(), 9)
 	assert.Len(t, disc2.GetMembership(), 9)
 	assert.Len(t, disc3.GetMembership(), 9)
