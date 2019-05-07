@@ -193,7 +193,7 @@ type connection struct {
 	stopFlat     int32
 	stopChan     chan struct{}
 	stopWG       sync.WaitGroup
-	sync.Mutex
+	sync.RWMutex
 }
 
 func (conn *connection) close() {
@@ -336,16 +336,15 @@ func (conn *connection) readFromStream(errChan chan error, msgChan chan *protos.
 }
 
 func (conn *connection) getStream() stream {
-	conn.Lock()
-	defer conn.Unlock()
+	conn.RLock()
+	defer conn.RUnlock()
 
 	if conn.toDie() {
 		return nil
 	}
 
 	if conn.clientStream != nil && conn.serverStream != nil {
-		e := errors.New("Both client and server stream are not nil, something went wrong")
-		logging.Errorf("%+v", e)
+		logging.Error("Both client and server stream are not nil, something went wrong")
 	}
 
 	if conn.clientStream != nil {
