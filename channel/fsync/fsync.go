@@ -160,9 +160,22 @@ func (p *FileSyncProvier) periodicalInvocation(d time.Duration) {
 			p.stopCh <- s
 			return
 		case <-time.After(d):
+			swapped := atomic.CompareAndSwapInt32(&p.state, int32(0), int32(2))
+			if !swapped {
+				continue
+			}
+
 			p.requestDataAppend()
+			atomic.StoreInt32(&p.state, int32(0))
+
 		case <-p.payloads.Ready():
+			swapped := atomic.CompareAndSwapInt32(&p.state, int32(0), int32(2))
+			if !swapped {
+				continue
+			}
+
 			p.processPayloads()
+			atomic.StoreInt32(&p.state, int32(0))
 		}
 	}
 }
@@ -174,23 +187,28 @@ func (p *FileSyncProvier) processDataReq() {
 	for {
 		select {
 		case msg := <-p.reqChan:
+			swapped := atomic.CompareAndSwapInt32(&p.state, int32(0), int32(1))
+			if !swapped {
+				if atomic.LoadInt32(&p.state) != int32(1) {
+					continue
+				}
+			}
+
 			wg.Add(1)
 			go p.handleDataReq(msg, wg)
+			if swapped {
+				go func() { wg.Wait(); atomic.StoreInt32(&p.state, int32(0)) }()
+			}
+
 		case s := <-p.stopCh:
-			p.stopCh <- s
 			wg.Wait()
+			p.stopCh <- s
 			return
 		}
 	}
 }
 
 func (p *FileSyncProvier) processPayloads() {
-	swapped := atomic.CompareAndSwapInt32(&p.state, int32(0), int32(2))
-	if !swapped {
-		return
-	}
-	defer func() { atomic.StoreInt32(&p.state, int32(0)) }()
-
 	logging.Debugf("[%s] Ready to process payloads, next payload start number is = [%d]", p.filename, p.payloads.Next())
 	fs := p.GetFileSystem()
 	f, err := fs.OpenFile(p.chainID, config.FileMeta{Name: p.filename, Metadata: p.metadata, Leader: p.leader}, os.O_WRONLY|os.O_APPEND, os.ModePerm)
@@ -241,15 +259,6 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 	if !bytes.Equal(p.chainMac, msg.ChainMac) {
 		logging.Warningf("Received message for channel %s while expecting channel %s, ignoring", common.ChainMac(msg.ChainMac), p.chainMac)
 		return
-	}
-
-	swapped := atomic.CompareAndSwapInt32(&p.state, int32(0), int32(1))
-	if !swapped {
-		if atomic.LoadInt32(&p.state) != int32(1) {
-			return
-		}
-	} else {
-		defer func() { atomic.StoreInt32(&p.state, int32(0)) }()
 	}
 
 	req := msg.GetDataReq()
@@ -353,12 +362,6 @@ func (p *FileSyncProvier) createAppendDataMsg(data []byte, n int, start int64) (
 }
 
 func (p *FileSyncProvier) requestDataAppend() {
-	swapped := atomic.CompareAndSwapInt32(&p.state, int32(0), int32(2))
-	if !swapped {
-		return
-	}
-	defer func() { atomic.StoreInt32(&p.state, int32(0)) }()
-
 	req, err := p.createDataAppendMsgRequest()
 	if err != nil {
 		logging.Warningf("Failed creating SignedRKSyncMessage: %+v", err)
