@@ -9,6 +9,7 @@ package mocks
 import (
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/rkcloudchain/rksync/config"
 )
@@ -21,6 +22,12 @@ func NewFSMock(basedir string) *FileSystemMock {
 // FileSystemMock mocks a file system
 type FileSystemMock struct {
 	baseDir string
+}
+
+// FileLocker ..
+type FileLocker struct {
+	*os.File
+	*sync.RWMutex
 }
 
 // Create ...
@@ -43,13 +50,18 @@ func (m *FileSystemMock) Create(chainID string, fmeta config.FileMeta) (config.F
 	if err != nil {
 		return nil, err
 	}
-	return f, nil
+	return &FileLocker{File: f, RWMutex: &sync.RWMutex{}}, nil
 }
 
 // OpenFile ...
 func (m *FileSystemMock) OpenFile(chainID string, fmeta config.FileMeta, flag int, perm os.FileMode) (config.File, error) {
 	p := filepath.Join(m.baseDir, fmeta.Name)
-	return os.OpenFile(p, flag, perm)
+	f, err := os.OpenFile(p, flag, perm)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FileLocker{File: f, RWMutex: &sync.RWMutex{}}, nil
 }
 
 // Stat ...

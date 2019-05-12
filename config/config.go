@@ -300,6 +300,14 @@ type FileMeta struct {
 	Leader   bool
 }
 
+// ReadWriteLock represents a read-write lock
+type ReadWriteLock interface {
+	RLock()
+	RUnlock()
+	Lock()
+	Unlock()
+}
+
 // FileSystem enables the rksync to communicate with file system.
 type FileSystem interface {
 	// Create creates the named file
@@ -317,4 +325,5 @@ type File interface {
 	io.Closer
 	io.ReaderAt
 	io.Writer
+	ReadWriteLock
 }
