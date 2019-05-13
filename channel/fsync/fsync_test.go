@@ -3,7 +3,6 @@ package fsync_test
 import (
 	"math/rand"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,9 +21,7 @@ var (
 	pkiIDForPeer2 = common.PKIidType("peer2")
 )
 
-type dummyFile struct {
-	sync.RWMutex
-}
+type dummyFile struct{}
 
 func (f *dummyFile) Close() error {
 	return nil

@@ -218,9 +218,6 @@ func (p *FileSyncProvier) processPayloads() {
 	}
 	defer f.Close()
 
-	f.Lock()
-	defer f.Unlock()
-
 	for payload := p.payloads.Peek(); payload != nil; payload = p.payloads.Peek() {
 		if payload.IsAppend() {
 			n, err := f.Write(payload.Data)
@@ -305,9 +302,6 @@ func (p *FileSyncProvier) handleDataReq(msg *protos.RKSyncMessage, wg *sync.Wait
 			return
 		}
 		defer f.Close()
-
-		f.RLock()
-		defer f.RUnlock()
 
 		for {
 			n, err = f.ReadAt(data, start)
