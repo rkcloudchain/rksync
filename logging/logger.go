@@ -27,6 +27,11 @@ type Logger interface {
 	Fatalf(format string, args ...interface{})
 }
 
+// GetLogger returns the logger
+func GetLogger() Logger {
+	return logger
+}
+
 // SetLogger sets logger that is used in rksync
 func SetLogger(l Logger) {
 	logger = l

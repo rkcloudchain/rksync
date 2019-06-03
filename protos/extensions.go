@@ -376,9 +376,19 @@ func (si *ChainStateInfo) Sign(signer Signer) (*Envelope, error) {
 	return e, nil
 }
 
-// IsAppend returns whether this Payload is a append message
-func (p *Payload) IsAppend() bool {
-	return p.GetAppend() != nil
+// IsAppend returns whether this message is a append message
+func (m *DataMessage) IsAppend() bool {
+	return m.GetAppend() != nil
+}
+
+// IsRandom returns whether this message is a random message
+func (m *DataMessage) IsRandom() bool {
+	return m.GetRandom() != nil
+}
+
+// IsPatcher returns whether this message is a random patcher
+func (m *DataMessage) IsPatcher() bool {
+	return m.GetPatcher() != nil
 }
 
 // IsAppend returns whether this DataRequest is a append message

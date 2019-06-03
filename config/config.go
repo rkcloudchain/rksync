@@ -310,6 +310,9 @@ type FileSystem interface {
 
 	// Stat returns a FileInfo describing the named file.
 	Stat(chainID string, fmeta FileMeta) (os.FileInfo, error)
+
+	// Chtimes changes the modification times of the file
+	Chtimes(chainID string, fmeta FileMeta, mtime time.Time) error
 }
 
 // File represents a file in the filesystem
@@ -317,4 +320,6 @@ type File interface {
 	io.Closer
 	io.ReaderAt
 	io.Writer
+	io.Reader
+	io.Seeker
 }

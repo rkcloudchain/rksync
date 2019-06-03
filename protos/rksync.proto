@@ -9,6 +9,7 @@ package protos;
 
 import "google/protobuf/empty.proto";
 import "gogoproto/gogo.proto";
+import "syncpb/sync.proto";
 
 option go_package = "github.com/rkcloudchain/rksync/protos" ;
 option (gogoproto.marshaler_all) = true;
@@ -126,19 +127,31 @@ message ChainStatePullRequest {
 
 message DataMessage {
     string file_name = 1;
-    Payload payload = 2;
-}
-
-message Payload {
-    bytes data = 1;
-    oneof metadata {
-        AppendMetadata append = 3;
+    bytes pki_id = 2;
+    oneof payload {
+        AppendPayload append = 4;
+        RandomPayload random = 5;
+        RandomPatcher patcher = 6;
     }
 }
 
-message AppendMetadata {
-    int64 start = 1;
-    int64 length = 2;
+message AppendPayload {
+    int64 start_offset = 1;
+    bytes data = 2;
+}
+
+message RandomPayload {
+    int64 start_offset = 1;
+    bytes data = 2;
+}
+
+message RandomPatcher {
+    int64 mod_time = 1;
+    syncpb.PatcherBlockSpan patcher = 2;
+}
+
+message RandomMetadata {
+    int64 start_offset = 1;
 }
 
 message DataRequest {
@@ -146,11 +159,23 @@ message DataRequest {
     bytes pki_id = 2;
     oneof req {
         AppendRequest append = 4;
+        RandomRequest random = 5;
+        BlockRequest block_req = 6;
     }
 }
 
 message AppendRequest {
     int64 length = 1;
+}
+
+message RandomRequest {
+    int64 mod_time = 1;
+    syncpb.ChunkChecksums checksums = 2;
+}
+
+message BlockRequest {
+    int64 start_offset = 1;
+    int64 end_offset = 2;
 }
 
 message LeaveChainMessage {

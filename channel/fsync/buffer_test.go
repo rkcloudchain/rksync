@@ -17,18 +17,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func payloadWithStart(start int64) (*protos.Payload, error) {
+func payloadWithStart(start int64) (*protos.DataMessage, error) {
 	data := make([]byte, 64)
-	n, err := rand.Read(data)
+	_, err := rand.Read(data)
 	if err != nil {
 		return nil, err
 	}
-	return &protos.Payload{
-		Data: data,
-		Metadata: &protos.Payload_Append{
-			Append: &protos.AppendMetadata{
-				Start:  start,
-				Length: int64(n),
+	return &protos.DataMessage{
+		Payload: &protos.DataMessage_Append{
+			Append: &protos.AppendPayload{
+				StartOffset: start,
 			},
 		},
 	}, nil
@@ -75,7 +73,7 @@ func TestPayloadBufferReady(t *testing.T) {
 	select {
 	case <-fin:
 		payload := buffer.Peek()
-		assert.Equal(t, int64(1), payload.GetAppend().Start)
+		assert.Equal(t, int64(1), payload.GetAppend().StartOffset)
 	case <-time.After(500 * time.Millisecond):
 		t.Fail()
 	}

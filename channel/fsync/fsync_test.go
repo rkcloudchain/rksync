@@ -35,6 +35,14 @@ func (f *dummyFile) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+func (f *dummyFile) Read(p []byte) (n int, err error) {
+	return len(p), nil
+}
+
+func (f *dummyFile) Seek(offset int64, whence int) (int64, error) {
+	return offset, nil
+}
+
 type dummyFileInfo struct{}
 
 func (fi *dummyFileInfo) Name() string {
@@ -78,6 +86,10 @@ func (fs *dummyFileSystem) OpenFile(chainID string, fmeta config.FileMeta, flag 
 func (fs *dummyFileSystem) Stat(chainID string, fmeta config.FileMeta) (os.FileInfo, error) {
 	assert.Equal(fs.t, fs.leader, fmeta.Leader)
 	return &dummyFileInfo{}, nil
+}
+
+func (fs *dummyFileSystem) Chtimes(chainID string, fmeta config.FileMeta, mtime time.Time) error {
+	return nil
 }
 
 type dummyRPCModule struct {

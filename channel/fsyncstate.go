@@ -18,7 +18,7 @@ import (
 
 func newFSyncState(gc *gossipChannel) *fsyncState {
 	return &fsyncState{
-		files:    make(map[string]*fsync.FileSyncProvier),
+		files:    make(map[string]fsync.FileSyncProvider),
 		gc:       gc,
 		stopping: int32(0),
 	}
@@ -26,12 +26,12 @@ func newFSyncState(gc *gossipChannel) *fsyncState {
 
 type fsyncState struct {
 	sync.RWMutex
-	files    map[string]*fsync.FileSyncProvier
+	files    map[string]fsync.FileSyncProvider
 	gc       *gossipChannel
 	stopping int32
 }
 
-func (f *fsyncState) lookupFSyncProviderByFilename(filename string) *fsync.FileSyncProvier {
+func (f *fsyncState) lookupFSyncProviderByFilename(filename string) fsync.FileSyncProvider {
 	if f.isStopping() {
 		return nil
 	}
