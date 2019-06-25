@@ -295,7 +295,11 @@ func (is *identityMapper) setupCSP(conf *config.IdentityConfig) error {
 	id := certPubK.Identifier()
 	privateKey, err := is.csp.GetKey(id)
 	if err != nil {
-		return errors.Wrap(err, "Could not find matching private key for SKI")
+		id = certPubK.SKI()
+		privateKey, err = is.csp.GetKey(id)
+		if err != nil {
+			return errors.Wrap(err, "Could not find matching private key for SKI")
+		}
 	}
 	if !privateKey.Private() {
 		return errors.Errorf("The private key associated with the certificate with SKI '%s' was not found", hex.EncodeToString(id))
